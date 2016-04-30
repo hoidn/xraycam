@@ -1,0 +1,9 @@
+setup.py
+src/__init__.py
+src/camcontrol.py
+src/detconfig.py
+src/xraycam.egg-info/PKG-INFO
+src/xraycam.egg-info/SOURCES.txt
+src/xraycam.egg-info/dependency_links.txt
+src/xraycam.egg-info/not-zip-safe
+src/xraycam.egg-info/top_level.txt
