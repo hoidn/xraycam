@@ -44,12 +44,12 @@ class DataRun:
         if filter_sum:
             exposure_cmd += ' -p'
 
-        keypath = resource_path('data/id_rsa.pub')
+        #keypath = resource_path('data/id_rsa.pub')
         #keypath = "/home/oliver/.ssh/id_rsa.pub"
 
         ssh = SSHClient()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        ssh.connect(detconfig.BBB_IP, 22, 'debian', key_filename=keypath)
+        ssh.connect(detconfig.BBB_IP, 22, 'debian', password = 'bbb')
 
         #take an exposure
         (sshin2, sshout2, ssherr2) = ssh.exec_command('cd' + ' ' + detconfig.base_path\
