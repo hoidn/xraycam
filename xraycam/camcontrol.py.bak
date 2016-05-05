@@ -2,19 +2,18 @@ from paramiko import SSHClient
 import paramiko
 import numpy as np
 import time
-from . import detconfig
+import detconfig
 import argparse
 import matplotlib.pyplot as plt
 import pkg_resources
 import os
 import copy
 import pdb
-from functools import reduce
 
 PKG_NAME = __name__.split('.')[0]
 
 def resource_f(fpath):
-    from io import StringIO
+    from StringIO import StringIO
     return StringIO(pkg_resources.resource_string(PKG_NAME, fpath))
 
 def resource_path(fpath):
@@ -67,7 +66,7 @@ class DataRun:
             #take an exposure
             (sshin2, sshout2, ssherr2) = ssh.exec_command('cd' + ' ' + detconfig.base_path\
                 + '; ' + exposure_cmd)
-            print(sshout2.read())
+            print sshout2.read()
             ssh.close()
 
         self.frame = Frame(array = self.get_array())
@@ -88,18 +87,18 @@ class DataRun:
     def get_histograms(self):
         def plot_one(name):
             if not os.path.isfile(name):# or args.reload:
-                get_ipython().system('scp -r debian@' + detconfig.BBB_IP +\
+                get_ipython().system(u'scp -r debian@' + detconfig.BBB_IP +\
                     ':' + detconfig.base_path + '/' + name + ' ' + name)
             return np.fromfile(name, dtype = 'uint32')
-        pixels = plot_one(self.prefix + 'pixels.dat')
-        singles = plot_one(self.prefix + 'singles.dat')
+        pixels = plot_one(self.path + 'pixels.dat')
+        singles = plot_one(self.path + 'singles.dat')
         return pixels, singles
 
-    def plot_histograms(self, pixels_plot = True, singles_plot = True, show = True,
+    def plot_histograms(self, pixels_plot = True, singles_plot = True, show = False,
             block = False,  calibrate = True, **kwargs):
         pixels, singles = self.get_histograms()
         #plt.ylim((0, np.max(pixels[15:])))
-        x = np.array(list(range(len(pixels))))
+        x = np.array(range(len(pixels)))
         if calibrate:
             plt.xlabel('Energy (eV)')
             x = adc_to_eV(x)
@@ -149,7 +148,7 @@ class RunSet:
                 prefixes = [str(time.time()) for _ in range(number_runs)]
             else:
                 prefixes = [base_name + '_%d' % i for i in range(number_runs)]
-        self.dataruns = [DataRun(run_prefix = prefix, **kwargs) for prefix in prefixes]
+        self.dataruns = map(lambda prefix: DataRun(run_prefix = prefix, **kwargs), prefixes)
 
     def insert(self,  datarun = None, *args, **kwargs):
         """
@@ -169,7 +168,7 @@ class RunSet:
     def plot_lineouts(self, *args, show = True, **kwargs):
         def one_lineout(datarun):
             return datarun.plot_lineout(*args, show = False, **kwargs)
-        lineouts = list(map(one_lineout, self.dataruns))
+        lineouts = map(one_lineout, self.dataruns)
         if show:
             plt.show()
         return lineouts
@@ -183,10 +182,10 @@ class RunSet:
         """
         import operator
         datarun_arrays = [dr.get_frame().get_data() for dr in self.dataruns]
-        frames = list(map(Frame, datarun_arrays))
+        frames = map(Frame, datarun_arrays)
         def framefilter(frame):
             return frame.filter(**kwargs)
-        return reduce(operator.add, list(map(framefilter, frames)))
+        return reduce(operator.add, map(framefilter, frames))
 
 class Frame:
     def __init__(self, array = None, numExposures = 0):
