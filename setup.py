@@ -4,5 +4,5 @@ setup(name = 'xraycam',
     packages = find_packages('.'),
     package_dir = {'xraycam': 'xraycam'},
     package_data = {'xraycam': ['data/*']},
-    install_requires = ['paramiko', 'numpy', 'matplotlib'],
+    install_requires = ['paramiko', 'numpy', 'matplotlib', 'mpld3'],
     zip_safe = False)
