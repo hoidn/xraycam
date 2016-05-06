@@ -146,7 +146,7 @@ class RunSet:
             if run_prefix is None:
                 prefixes = [str(time.time()) for _ in range(number_runs)]
             else:
-                prefixes = [base_name + '_%d' % i for i in range(number_runs)]
+                prefixes = [run_prefix + '_%d' % i for i in range(number_runs)]
         self.dataruns = [DataRun(run_prefix = prefix, **kwargs) for prefix in prefixes]
 
     def insert(self,  datarun = None, *args, **kwargs):
