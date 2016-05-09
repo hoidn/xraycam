@@ -32,7 +32,7 @@ def get_file(source, dest = None):
     if not dirname:
         dirname = '.'
     if not os.path.exists(dirname):
-        os.path.makedirs(dirname)
+        os.makedirs(dirname)
     dirname = dirname + '/'
     os.system('rsync -avz debian@' + detconfig.BBB_IP + ':' +\
         detconfig.base_path + source + ' ' +  dirname)
