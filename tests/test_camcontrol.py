@@ -1,5 +1,7 @@
-from xraycam import camcontrol
+import numpy as np
 import time
+
+from xraycam import camcontrol
 
     
 #def test_data_transfer():
@@ -16,3 +18,9 @@ import time
 #    # Should load existing data
 #    get_datarun(prefix, run = False)
 
+def test_rebin():
+    c, d = camcontrol._rebin_spectrum(list(range(20)), np.array(list(range(20))))
+    assert np.all(
+            d == np.array([10, 35, 60])
+            )
+    return 0

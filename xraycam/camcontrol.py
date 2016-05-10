@@ -4,12 +4,14 @@ import numpy as np
 import time
 from . import detconfig
 import argparse
-import matplotlib.pyplot as plt
 import pkg_resources
 import os
 import copy
 import pdb
 from functools import reduce
+
+from xraycam.mpl_plotly import plt
+from xraycam import utils
 
 PKG_NAME = __name__.split('.')[0]
 
@@ -42,7 +44,53 @@ def adc_to_eV(adc_values):
     calib_slope = detconfig.calib_slope
     calib_intercept = detconfig.calib_intercept
     return adc_values * calib_slope + calib_intercept
-    
+
+# from https://en.wikibooks.org/wiki/Algorithm_Implementation/Strings/Longest_common_substring
+def _longest_common_substring(s1, s2):
+    m = [[0] * (1 + len(s2)) for i in range(1 + len(s1))]
+    longest, x_longest = 0, 0
+    for x in range(1, 1 + len(s1)):
+        for y in range(1, 1 + len(s2)):
+            if s1[x - 1] == s2[y - 1]:
+                m[x][y] = m[x - 1][y - 1] + 1
+            if m[x][y] > longest:
+                longest = m[x][y]
+                x_longest = x
+            else:
+                m[x][y] = 0
+            return s1[x_longest - longest: x_longest]    
+
+@utils.conserve_type
+def _rebin_spectrum(x, y, rebinsize = 5):
+    """
+    Rebin `x` and `y` into arrays of length `int(len(x)/rebinsize)`. The highest-x
+    bin is in case len(x) isn't a multiple of rebinsize.
+
+    x is assumed to be sorted in ascending order.
+    """
+    def group(arr1d, op = np.mean):
+        """
+        op: a function to evaluate on each new bin that returns a numeric value.
+        >>> rebinsize = 3
+        >>> group(range(10))
+        [[0, 1, 2], [3, 4, 5], [6, 7, 8]]
+        """
+        import itertools
+        i = itertools.count()
+        def key(dummy):
+            xindx = i.__next__()
+            return int(xindx/rebinsize)
+        return [op(list(values)) for groupnum, values in itertools.groupby(arr1d, key = key)][:-1]
+    return group(x, np.mean), group(y, np.sum)
+
+def _plot_lineout(lineout, show = False, rebin = 1, label = ''):
+    if (not isinstance(rebin, int)) or rebin < 1:
+        raise ValueError("Rebin must be a positive integer")
+    pixeli, intensity = _rebin_spectrum(list(range(len(lineout))), lineout, rebinsize = rebin)
+    plt.plot(pixeli, intensity, label = label)
+    if show:
+        plt.show()
+    return lineout
 
 class DataRun:
     def __init__(self, run_prefix = 'data/' + 'exposure.' + str(time.time()),\
@@ -127,15 +175,17 @@ class DataRun:
         if show:
             plt.show(block = block)
 
-    def plot_lineout(self, show = False, filter = False, smooth = 0, **kwargs):
+    # TODO: move smoothing into _plot_lineout
+    def plot_lineout(self, filter = False, show = False, smooth = 0, rebin = 1, **kwargs):
+        """
+        kwargs are passed to self.frame.filter.
+        """
         if filter:
             lineout = self.frame.filter(**kwargs).lineout(smooth = smooth)
         else:
             lineout = self.frame.lineout(smooth = smooth)
-        plt.plot(lineout)
-        if show:
-            plt.show()
-        return lineout
+        return _plot_lineout(lineout, show = show, rebin = rebin, label = self.prefix)
+
 
     def filter_frame(self, **kwargs):
         self.frame = self.frame.filter(**kwargs)
@@ -147,22 +197,28 @@ class RunSet:
     """
     Class containing a collection of DataRun instances.
     """
-    def __init__(self, prefixes = None, number_runs = 0, run_prefix = None, **kwargs):
+    def __init__(self, dataruns = None, prefixes = None, number_runs = 0, run_prefix = None, **kwargs):
         """
+        dataruns : iterable containing `DataRun` instances.
         prefixes : list of str
             A list of dataset prefixes.
         number_runs : int
         run_prefix : str
         
-        Call using either a list of run prefixes
-        OR number_runs and run_prefix. 
+        Instantiate a RunSet  using:
+            (1) `dataruns`, if `dataruns is not None`, OR
+            (2) prefixes, if provided, OR
+            (3) `number_runs` and `run_prefix`
         """
-        if prefixes is None:
-            if run_prefix is None:
-                prefixes = [str(time.time()) for _ in range(number_runs)]
-            else:
-                prefixes = [run_prefix + '_%d' % i for i in range(number_runs)]
-        self.dataruns = [DataRun(run_prefix = prefix, **kwargs) for prefix in prefixes]
+        if dataruns is not None:
+            self.dataruns = dataruns
+        else:
+            if prefixes is None:
+                if run_prefix is None:
+                    prefixes = [str(time.time()) for _ in range(number_runs)]
+                else:
+                    prefixes = [run_prefix + '_%d' % i for i in range(number_runs)]
+            self.dataruns = [DataRun(run_prefix = prefix, **kwargs) for prefix in prefixes]
 
     def __add__(self, other):
         new = RunSet()
@@ -239,8 +295,11 @@ class Frame:
         data[row_outliers[:, np.newaxis] | pixel_outliers] = 0.
         return new
 
+    # TODO: move smooth parameter to _plot_lineout
     def lineout(self, smooth = 0):
         from scipy.ndimage.filters import gaussian_filter as gf
         return gf(np.sum(self.data, axis = 0), smooth)
 
+    def plot_lineout(self, smooth = 0, **kwargs):
+        return _plot_lineout(self.lineout(smooth = smooth, **kwargs))
 
