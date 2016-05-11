@@ -12,6 +12,7 @@ from functools import reduce
 
 from xraycam.mpl_plotly import plt
 from xraycam import utils
+from xraycam import config
 
 PKG_NAME = __name__.split('.')[0]
 
@@ -64,16 +65,16 @@ def _longest_common_substring(s1, s2):
 def _rebin_spectrum(x, y, rebinsize = 5):
     """
     Rebin `x` and `y` into arrays of length `int(len(x)/rebinsize)`. The highest-x
-    bin is in case len(x) isn't a multiple of rebinsize.
+    bin is dropped in case len(x) isn't a multiple of rebinsize.
 
-    x is assumed to be sorted in ascending order.
+    x is assumed to be evenly-spaced and in ascending order.
     """
     def group(arr1d, op = np.mean):
         """
         op: a function to evaluate on each new bin that returns a numeric value.
         >>> rebinsize = 3
         >>> group(range(10))
-        [[0, 1, 2], [3, 4, 5], [6, 7, 8]]
+        [1.0, 4.0, 7.0]
         """
         import itertools
         i = itertools.count()
@@ -83,14 +84,31 @@ def _rebin_spectrum(x, y, rebinsize = 5):
         return [op(list(values)) for groupnum, values in itertools.groupby(arr1d, key = key)][:-1]
     return group(x, np.mean), group(y, np.sum)
 
-def _plot_lineout(lineout, show = False, rebin = 1, label = ''):
+def _get_poisson_uncertainties(intensities):
+    """
+    Return the array of Poisson standard deviations, based on photon counting
+    statistics alone, for an array containing summed ADC values.
+    """
+    return np.sqrt(np.array(intensities)*config.photon_ADC_value)
+
+def _plot_lineout(lineout, show = False, rebin = 1, label = '', error_bars = True):
     if (not isinstance(rebin, int)) or rebin < 1:
         raise ValueError("Rebin must be a positive integer")
     pixeli, intensity = _rebin_spectrum(list(range(len(lineout))), lineout, rebinsize = rebin)
-    plt.plot(pixeli, intensity, label = label)
+    if error_bars:
+        if not (config.plotting_mode == 'notebook'):
+            raise NotImplementedError("Error bars not supported in matplotlib mode")
+        error_y = dict(
+            type = 'data',
+            array = _get_poisson_uncertainties(intensity),
+            visible = True
+        )
+        plt.plot(pixeli, intensity, label = label, error_y = error_y)
+    else:
+        plt.plot(pixeli, intensity, label = label)
     if show:
         plt.show()
-    return lineout
+    return intensity
 
 class DataRun:
     def __init__(self, run_prefix = 'data/' + 'exposure.' + str(time.time()),\
@@ -176,7 +194,8 @@ class DataRun:
             plt.show(block = block)
 
     # TODO: move smoothing into _plot_lineout
-    def plot_lineout(self, filter = False, show = False, smooth = 0, rebin = 1, **kwargs):
+    def plot_lineout(self, filter = False, show = False, smooth = 0, rebin = 1,
+            error_bars = True, **kwargs):
         """
         kwargs are passed to self.frame.filter.
         """
@@ -184,7 +203,8 @@ class DataRun:
             lineout = self.frame.filter(**kwargs).lineout(smooth = smooth)
         else:
             lineout = self.frame.lineout(smooth = smooth)
-        return _plot_lineout(lineout, show = show, rebin = rebin, label = self.prefix)
+        return _plot_lineout(lineout, show = show, rebin = rebin,
+            label = self.prefix, error_bars = error_bars)
 
 
     def filter_frame(self, **kwargs):
@@ -300,6 +320,6 @@ class Frame:
         from scipy.ndimage.filters import gaussian_filter as gf
         return gf(np.sum(self.data, axis = 0), smooth)
 
-    def plot_lineout(self, smooth = 0, **kwargs):
-        return _plot_lineout(self.lineout(smooth = smooth, **kwargs))
+    def plot_lineout(self, smooth = 0, error_bars = True):
+        return _plot_lineout(self.lineout(smooth = smooth, error_bars = error_bars))
 

@@ -22,7 +22,12 @@ class Figure:
         self.xaxis = {'exponentformat': 'power'}
         self.yaxis = {}
 
-    def plot(self, *args, label = None, color = None):
+    def plot(self, *args, label = None, color = None, **kwargs):
+        """
+        Add a curve to the figure.
+
+        kwargs are passed through to the argument dictionary for go.Scatter.
+        """
         if len(args) == 2:
             x, y = args
         elif len(args) == 1:
@@ -38,7 +43,7 @@ class Figure:
         else:
             scatter_kwargs['showlegend'] = True
         self.lines.append(
-            go.Scatter(**scatter_kwargs))
+            go.Scatter(**{**scatter_kwargs, **kwargs}))
 
     def set_xlabel(self, xlabel):
         self.xaxis['title'] = xlabel
