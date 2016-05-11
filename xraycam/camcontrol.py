@@ -47,7 +47,11 @@ def adc_to_eV(adc_values):
     return adc_values * calib_slope + calib_intercept
 
 # from https://en.wikibooks.org/wiki/Algorithm_Implementation/Strings/Longest_common_substring
-def _longest_common_substring(s1, s2, *rest):
+def _longest_common_substring(s1, *rest):
+    if not rest:
+        return s1
+    else:
+        s2, newrest = rest[0], rest[1:]
     m = [[0] * (1 + len(s2)) for i in range(1 + len(s1))]
     longest, x_longest = 0, 0
     for x in range(1, 1 + len(s1)):
@@ -60,10 +64,7 @@ def _longest_common_substring(s1, s2, *rest):
             else:
                 m[x][y] = 0
     merged = s1[x_longest - longest: x_longest]
-    if not rest:
-        return merged
-    else:
-        return _longest_common_substring(merged, *rest)
+    return _longest_common_substring(merged, *newrest)
 
 
 @utils.conserve_type
