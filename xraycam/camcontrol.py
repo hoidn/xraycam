@@ -47,19 +47,24 @@ def adc_to_eV(adc_values):
     return adc_values * calib_slope + calib_intercept
 
 # from https://en.wikibooks.org/wiki/Algorithm_Implementation/Strings/Longest_common_substring
-def _longest_common_substring(s1, s2):
+def _longest_common_substring(s1, s2, *rest):
     m = [[0] * (1 + len(s2)) for i in range(1 + len(s1))]
     longest, x_longest = 0, 0
     for x in range(1, 1 + len(s1)):
         for y in range(1, 1 + len(s2)):
             if s1[x - 1] == s2[y - 1]:
                 m[x][y] = m[x - 1][y - 1] + 1
-            if m[x][y] > longest:
-                longest = m[x][y]
-                x_longest = x
+                if m[x][y] > longest:
+                    longest = m[x][y]
+                    x_longest = x
             else:
                 m[x][y] = 0
-            return s1[x_longest - longest: x_longest]    
+    merged = s1[x_longest - longest: x_longest]
+    if not rest:
+        return merged
+    else:
+        return _longest_common_substring(merged, *rest)
+
 
 @utils.conserve_type
 def _rebin_spectrum(x, y, rebinsize = 5):
@@ -152,7 +157,7 @@ class DataRun:
             print(sshout2.read())
             ssh.close()
 
-        self.frame = Frame(array = self.get_array())
+        self.frame = Frame(array = self.get_array(), name = self.prefix)
 
     def get_frame(self):
         return self.frame
@@ -239,6 +244,10 @@ class RunSet:
                 else:
                     prefixes = [run_prefix + '_%d' % i for i in range(number_runs)]
             self.dataruns = [DataRun(run_prefix = prefix, **kwargs) for prefix in prefixes]
+        if prefixes is not None:
+            self.name = _longest_common_substring(*prefixes)
+        else:
+            self.name = ''
 
     def __add__(self, other):
         new = RunSet()
@@ -277,16 +286,17 @@ class RunSet:
         """
         import operator
         datarun_arrays = [dr.get_frame().get_data() for dr in self.dataruns]
-        frames = list(map(Frame, datarun_arrays))
+        frames = list(map(lambda arr: Frame(arr, name = self.name), datarun_arrays))
         def framefilter(frame):
             return frame.filter(**kwargs)
         return reduce(operator.add, list(map(framefilter, frames)))
 
 class Frame:
-    def __init__(self, array = None, numExposures = 0):
+    def __init__(self, array = None, numExposures = 0, name = ''):
         """Construct using either a DataRun instance, or another Frame."""
         self.data = array
         self.numExposures = numExposures
+        self.name = name
 
     def show(self, **kwargs):
         """Show the frame. Kwargs are passed through to plt.imshow."""
@@ -297,7 +307,11 @@ class Frame:
         return self.data
 
     def __add__(self, other):
-        new = Frame(array = self.data)
+        if self.name and other.name:
+            name =  _longest_common_substring(self.name, other.name)
+        else:
+            name = ''
+        new = Frame(array = self.data, name = name)
         new.data = new.data + other.data
         new.numExposures = self.numExposures + other.numExposures
         return new
@@ -320,6 +334,7 @@ class Frame:
         from scipy.ndimage.filters import gaussian_filter as gf
         return gf(np.sum(self.data, axis = 0), smooth)
 
-    def plot_lineout(self, smooth = 0, error_bars = True):
-        return _plot_lineout(self.lineout(smooth = smooth, error_bars = error_bars))
+    def plot_lineout(self, smooth = 0, error_bars = True, rebin = 1):
+        return _plot_lineout(self.lineout(smooth = smooth), error_bars = error_bars,
+            rebin = rebin, label = self.name)
 
