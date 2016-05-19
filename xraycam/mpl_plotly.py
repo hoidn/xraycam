@@ -92,9 +92,11 @@ class Plt:
         pass
 
     def show(self):
-        for fig in self.figures:
-            fig.show()
-        self.clear()
+        try:
+            for fig in self.figures:
+                fig.show()
+        finally:
+            self.clear()
 
     def imshow(self, *args, **kwargs):
         mplt.imshow(*args, **kwargs)
