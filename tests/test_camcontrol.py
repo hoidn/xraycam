@@ -3,6 +3,7 @@ import time
 
 from xraycam import camcontrol
 
+
     
 #def test_data_transfer():
 #    def get_datarun(run_prefix, run = False):
@@ -24,3 +25,11 @@ def test_rebin():
             d == np.array([10, 35, 60])
             )
     return 0
+
+def test_compose():
+    from xraycam.camcontrol import compose
+    def f(*args, **kwargs):
+        return args[0]
+    def g(*args, **kwargs):
+        return args[0]
+    assert compose(f, g)(5) == 5

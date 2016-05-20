@@ -8,6 +8,7 @@ import pkg_resources
 import os
 import copy
 import pdb
+
 from functools import reduce
 
 from xraycam.mpl_plotly import plt
@@ -15,6 +16,17 @@ from xraycam import utils
 from xraycam import config
 
 PKG_NAME = __name__.split('.')[0]
+
+# from https://gist.github.com/rossdylan/3287138
+from functools import partial
+def _composed(f, g, *args, **kwargs):
+    return f(g(*args, **kwargs))
+
+def compose(*a):
+    try:
+        return partial(_composed, a[0], compose(*a[1:]))
+    except:
+        return a[0]
 
 def resource_f(fpath):
     from io import StringIO
@@ -68,17 +80,19 @@ def _longest_common_substring(s1, *rest):
 
 
 @utils.conserve_type
-def _rebin_spectrum(x, y, rebinsize = 5):
+def _rebin_spectrum(x, y, rebin = 5):
     """
-    Rebin `x` and `y` into arrays of length `int(len(x)/rebinsize)`. The highest-x
-    bin is dropped in case len(x) isn't a multiple of rebinsize.
+    Rebin `x` and `y` into arrays of length `int(len(x)/rebin)`. The highest-x
+    bin is dropped in case len(x) isn't a multiple of rebin.
 
     x is assumed to be evenly-spaced and in ascending order.
+
+    Returns: x, y
     """
     def group(arr1d, op = np.mean):
         """
         op: a function to evaluate on each new bin that returns a numeric value.
-        >>> rebinsize = 3
+        >>> rebin = 3
         >>> group(range(10))
         [1.0, 4.0, 7.0]
         """
@@ -86,7 +100,7 @@ def _rebin_spectrum(x, y, rebinsize = 5):
         i = itertools.count()
         def key(dummy):
             xindx = i.__next__()
-            return int(xindx/rebinsize)
+            return int(xindx/rebin)
         return [op(list(values)) for groupnum, values in itertools.groupby(arr1d, key = key)][:-1]
     return group(x, np.mean), group(y, np.sum)
 
@@ -97,10 +111,7 @@ def _get_poisson_uncertainties(intensities):
     """
     return np.sqrt(np.array(intensities)*config.photon_ADC_value)
 
-def _plot_lineout(lineout, show = False, rebin = 1, label = '', error_bars = True):
-    if (not isinstance(rebin, int)) or rebin < 1:
-        raise ValueError("Rebin must be a positive integer")
-    pixeli, intensity = _rebin_spectrum(list(range(len(lineout))), lineout, rebinsize = rebin)
+def _plot_lineout(pixeli, intensity, show = False, label = '', error_bars = True):
     if error_bars:
         if not (config.plotting_mode == 'notebook'):
             raise NotImplementedError("Error bars not supported in matplotlib mode")
@@ -199,17 +210,16 @@ class DataRun:
         if show:
             plt.show(block = block)
 
-    # TODO: move smoothing into _plot_lineout
     def plot_lineout(self, filter = False, show = False, smooth = 0, rebin = 1,
             error_bars = True, **kwargs):
         """
         kwargs are passed to self.frame.filter.
         """
         if filter:
-            lineout = self.frame.filter(**kwargs).lineout(smooth = smooth)
+            frame = self.frame.filter(**kwargs)
         else:
-            lineout = self.frame.lineout(smooth = smooth)
-        return _plot_lineout(lineout, show = show, rebin = rebin,
+            frame = self.frame
+        return frame.plot_lineout(rebin = rebin, smooth = smooth,
             label = self.prefix, error_bars = error_bars)
 
 
@@ -330,12 +340,30 @@ class Frame:
         data[row_outliers[:, np.newaxis] | pixel_outliers] = 0.
         return new
 
-    # TODO: move smooth parameter to _plot_lineout
-    def lineout(self, smooth = 0):
-        from scipy.ndimage.filters import gaussian_filter as gf
-        return gf(np.sum(self.data, axis = 0), smooth)
+    def _raw_lineout(self):
+        return np.sum(self.data, axis = 0)
 
-    def plot_lineout(self, smooth = 0, error_bars = True, rebin = 1):
-        return _plot_lineout(self.lineout(smooth = smooth), error_bars = error_bars,
-            rebin = rebin, label = self.name)
+    def get_lineout(self, rebin = 1, smooth = 0):
+        """
+        Return a smoothed and rebinned lineout of self.data.
+
+        smooth : number of pixel columns by which to smooth
+        rebin : number of pixel columns per bin
+        """
+        def apply_smooth(arr1d):
+            from scipy.ndimage.filters import gaussian_filter as gf
+            return gf(arr1d, smooth)
+        def apply_rebin(arr1d):
+            return _rebin_spectrum(list(range(len(arr1d))), arr1d, rebin = rebin)
+
+        if (not isinstance(rebin, int)) or rebin < 1:
+            raise ValueError("Rebin must be a positive integer")
+
+        return compose(apply_rebin, apply_smooth)(self._raw_lineout())
+
+    def plot_lineout(self, smooth = 0, error_bars = True, rebin = 1, label = None):
+        if label is None:
+            label = self.name
+        return _plot_lineout(*self.get_lineout(rebin = rebin, smooth = smooth),
+            error_bars = error_bars, label = label)
 
