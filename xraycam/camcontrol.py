@@ -349,12 +349,14 @@ class Frame:
 
         smooth : number of pixel columns by which to smooth
         rebin : number of pixel columns per bin
+
+        Returns: bin values, intensities
         """
         def apply_smooth(arr1d):
             from scipy.ndimage.filters import gaussian_filter as gf
             return gf(arr1d, smooth)
         def apply_rebin(arr1d):
-            return _rebin_spectrum(list(range(len(arr1d))), arr1d, rebin = rebin)
+            return _rebin_spectrum(np.array(range(len(arr1d))), arr1d, rebin = rebin)
 
         if (not isinstance(rebin, int)) or rebin < 1:
             raise ValueError("Rebin must be a positive integer")
