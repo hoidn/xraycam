@@ -2,6 +2,7 @@ import numpy as np
 import time
 
 from xraycam import camcontrol
+from xraycam.nbinit import *
 
 
     
@@ -49,5 +50,22 @@ def test_compose():
         return args[0]
     assert compose(f, g)(5) == 5
 
-def test_get_lineout():
-    assert npcomp(frame.get_lineout(rebin = 500), [np.array([ 249.5,  749.5]), np.array([ 75983, 711786], dtype='uint64')])
+#def test_get_lineout():
+#    assert npcomp(frame.get_lineout(rebin = 500), [np.array([ 249.5,  749.5]), np.array([ 75983, 711786], dtype='uint64')])
+
+def test_runset():
+    frame = runset_and_merge('data/5.6.real1_', 1, gain = '0x3f', run = False,
+        window_min = 31, window_max = 55, threshold_min = 31, threshold_max = 55, numExposures = 1000)
+    assert frame.numExposures > 0
+
+def test_exisiting_data():
+    import time
+    import pytest
+    tname = str(time.time())
+    test_frame = runset_and_merge(tname, 1, gain = '0x3f', run = True, window_min = 31,
+        window_max = 55, numExposures = 40,  threshold_min = 31, threshold_max = 55)
+    with pytest.raises(Exception) as e_info:
+        test_frame = runset_and_merge(tname, 1, gain = '0x3f', run = True, window_min = 31,
+            window_max = 55, numExposures = 40,  threshold_min = 31, threshold_max = 55)
+       
+    

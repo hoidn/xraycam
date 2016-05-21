@@ -18,6 +18,8 @@ from xraycam import config
 PKG_NAME = __name__.split('.')[0]
 
 # from https://gist.github.com/rossdylan/3287138
+# TODO: how about this?:
+# def compose(*funcs): return lambda x: reduce(lambda v, f: f(v), reversed(funcs), x)
 from functools import partial
 def _composed(f, g, *args, **kwargs):
     return f(g(*args, **kwargs))
@@ -35,20 +37,30 @@ def resource_f(fpath):
 def resource_path(fpath):
     return pkg_resources.resource_filename(PKG_NAME, fpath)
 
-def get_file(source, dest = None):
+def _get_destination_dirname(source, dest = None):
     """
     source : file path on the beaglebone relative to detid.base_path
     dest : FULL path of the file to be copied (not just the target
     directory.
+
+    Return the full data target path on the local machine.
     """
     if dest is None:
         dest = source
     dirname, basename = os.path.split(dest)
     if not dirname:
         dirname = '.'
+    return dirname + '/'
+    
+def _copy_file(source, dest = None):
+    """
+    source : file path on the beaglebone relative to detid.base_path
+    dest : FULL path of the file to be copied (not just the target
+    directory.
+    """
+    dirname = _get_destination_dirname(source, dest)
     if not os.path.exists(dirname):
         os.makedirs(dirname)
-    dirname = dirname + '/'
     os.system('rsync -avz debian@' + detconfig.BBB_IP + ':' +\
         detconfig.base_path + source + ' ' +  dirname)
 
@@ -141,6 +153,9 @@ class DataRun:
         reload : bool
             If true, run an exposure sequence. (If false, we assume that output files
             with the name prefix: run_prefix + run_name already exist on the BBB). 
+
+        Raises ValueError if data corresponding to the run_prefix parameter already
+        exists locally.
         TODO: etc..
         """
         self.gain = gain
@@ -150,7 +165,11 @@ class DataRun:
         self.prefix = run_prefix
         self.filter_sum = filter_sum
 
+        self.arrayname= self.prefix + 'sum.dat'
+
         if run:
+            if os.path.exists(self.arrayname):
+                raise ValueError("Data file: %s already exists. Please choose a different run prefix." % self.arrayname)
             exposure_cmd = 'time sudo ./main_mt9m001 %d -o ' % threshold + run_prefix\
                 + ' -n ' + str(numExposures) + ' -g ' + gain +\
                 ' -r %d %d' % (window_min, window_max)
@@ -169,7 +188,8 @@ class DataRun:
             print(sshout2.read())
             ssh.close()
 
-        self.frame = Frame(array = self.get_array(), name = self.prefix)
+        self.frame = Frame(array = self.get_array(), name = self.prefix,
+            numExposures = self.numExposures)
 
     def get_frame(self):
         return self.frame
@@ -178,16 +198,14 @@ class DataRun:
         """
         Get the sum of exposures for a dataset prefix as a numpy array
         """
-        import time
-        name= self.prefix + 'sum.dat'
-        if not os.path.isfile(name):
-            get_file(name, name)
-        return np.reshape(np.fromfile(name, dtype = 'uint32'), (1024, 1280))
+        if not os.path.isfile(self.arrayname):
+            _copy_file(self.arrayname, self.arrayname)
+        return np.reshape(np.fromfile(self.arrayname, dtype = 'uint32'), (1024, 1280))
 
     def get_histograms(self):
         def plot_one(name):
             if not os.path.isfile(name):# or args.reload:
-                get_file(name, name)
+                _copy_file(name, name)
             return np.fromfile(name, dtype = 'uint32')
         pixels = plot_one(self.prefix + 'pixels.dat')
         singles = plot_one(self.prefix + 'singles.dat')
@@ -296,15 +314,17 @@ class RunSet:
         kwargs are passed through to DataRun.filter
         """
         import operator
-        datarun_arrays = [dr.get_frame().get_data() for dr in self.dataruns]
-        frames = list(map(lambda arr: Frame(arr, name = self.name), datarun_arrays))
+        def make_frame(dr):
+            old_frame = dr.get_frame()
+            return Frame(old_frame.get_data(), name = self.name,
+                numExposures = old_frame.numExposures)
+        frames = list(map(make_frame, self.dataruns))
         def framefilter(frame):
             return frame.filter(**kwargs)
         return reduce(operator.add, list(map(framefilter, frames)))
 
 class Frame:
     def __init__(self, array = None, numExposures = 0, name = ''):
-        """Construct using either a DataRun instance, or another Frame."""
         self.data = array
         self.numExposures = numExposures
         self.name = name
