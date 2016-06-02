@@ -8,6 +8,7 @@ import pkg_resources
 import os
 import copy
 import pdb
+
 from functools import reduce
 
 from xraycam.mpl_plotly import plt
@@ -16,6 +17,19 @@ from xraycam import config
 
 PKG_NAME = __name__.split('.')[0]
 
+# from https://gist.github.com/rossdylan/3287138
+# TODO: how about this?:
+# def compose(*funcs): return lambda x: reduce(lambda v, f: f(v), reversed(funcs), x)
+from functools import partial
+def _composed(f, g, *args, **kwargs):
+    return f(g(*args, **kwargs))
+
+def compose(*a):
+    try:
+        return partial(_composed, a[0], compose(*a[1:]))
+    except:
+        return a[0]
+
 def resource_f(fpath):
     from io import StringIO
     return StringIO(pkg_resources.resource_string(PKG_NAME, fpath))
@@ -23,20 +37,30 @@ def resource_f(fpath):
 def resource_path(fpath):
     return pkg_resources.resource_filename(PKG_NAME, fpath)
 
-def get_file(source, dest = None):
+def _get_destination_dirname(source, dest = None):
     """
     source : file path on the beaglebone relative to detid.base_path
     dest : FULL path of the file to be copied (not just the target
     directory.
+
+    Return the full data target path on the local machine.
     """
     if dest is None:
         dest = source
     dirname, basename = os.path.split(dest)
     if not dirname:
         dirname = '.'
+    return dirname + '/'
+    
+def _copy_file(source, dest = None):
+    """
+    source : file path on the beaglebone relative to detid.base_path
+    dest : FULL path of the file to be copied (not just the target
+    directory.
+    """
+    dirname = _get_destination_dirname(source, dest)
     if not os.path.exists(dirname):
         os.makedirs(dirname)
-    dirname = dirname + '/'
     os.system('rsync -avz debian@' + detconfig.BBB_IP + ':' +\
         detconfig.base_path + source + ' ' +  dirname)
 
@@ -68,17 +92,19 @@ def _longest_common_substring(s1, *rest):
 
 
 @utils.conserve_type
-def _rebin_spectrum(x, y, rebinsize = 5):
+def _rebin_spectrum(x, y, rebin = 5):
     """
-    Rebin `x` and `y` into arrays of length `int(len(x)/rebinsize)`. The highest-x
-    bin is dropped in case len(x) isn't a multiple of rebinsize.
+    Rebin `x` and `y` into arrays of length `int(len(x)/rebin)`. The highest-x
+    bin is dropped in case len(x) isn't a multiple of rebin.
 
     x is assumed to be evenly-spaced and in ascending order.
+
+    Returns: x, y
     """
     def group(arr1d, op = np.mean):
         """
         op: a function to evaluate on each new bin that returns a numeric value.
-        >>> rebinsize = 3
+        >>> rebin = 3
         >>> group(range(10))
         [1.0, 4.0, 7.0]
         """
@@ -86,7 +112,7 @@ def _rebin_spectrum(x, y, rebinsize = 5):
         i = itertools.count()
         def key(dummy):
             xindx = i.__next__()
-            return int(xindx/rebinsize)
+            return int(xindx/rebin)
         return [op(list(values)) for groupnum, values in itertools.groupby(arr1d, key = key)][:-1]
     return group(x, np.mean), group(y, np.sum)
 
@@ -97,10 +123,7 @@ def _get_poisson_uncertainties(intensities):
     """
     return np.sqrt(np.array(intensities)*config.photon_ADC_value)
 
-def _plot_lineout(lineout, show = False, rebin = 1, label = '', error_bars = True):
-    if (not isinstance(rebin, int)) or rebin < 1:
-        raise ValueError("Rebin must be a positive integer")
-    pixeli, intensity = _rebin_spectrum(list(range(len(lineout))), lineout, rebinsize = rebin)
+def _plot_lineout(pixeli, intensity, show = False, label = '', error_bars = True):
     if error_bars:
         if not (config.plotting_mode == 'notebook'):
             raise NotImplementedError("Error bars not supported in matplotlib mode")
@@ -130,6 +153,9 @@ class DataRun:
         reload : bool
             If true, run an exposure sequence. (If false, we assume that output files
             with the name prefix: run_prefix + run_name already exist on the BBB). 
+
+        Raises ValueError if data corresponding to the run_prefix parameter already
+        exists locally.
         TODO: etc..
         """
         self.gain = gain
@@ -139,7 +165,11 @@ class DataRun:
         self.prefix = run_prefix
         self.filter_sum = filter_sum
 
+        self.arrayname= self.prefix + 'sum.dat'
+
         if run:
+            if os.path.exists(self.arrayname):
+                raise ValueError("Data file: %s already exists. Please choose a different run prefix." % self.arrayname)
             exposure_cmd = 'time sudo ./main_mt9m001 %d -o ' % threshold + run_prefix\
                 + ' -n ' + str(numExposures) + ' -g ' + gain +\
                 ' -r %d %d' % (window_min, window_max)
@@ -158,7 +188,8 @@ class DataRun:
             print(sshout2.read())
             ssh.close()
 
-        self.frame = Frame(array = self.get_array(), name = self.prefix)
+        self.frame = Frame(array = self.get_array(), name = self.prefix,
+            numExposures = self.numExposures)
 
     def get_frame(self):
         return self.frame
@@ -167,16 +198,14 @@ class DataRun:
         """
         Get the sum of exposures for a dataset prefix as a numpy array
         """
-        import time
-        name= self.prefix + 'sum.dat'
-        if not os.path.isfile(name):
-            get_file(name, name)
-        return np.reshape(np.fromfile(name, dtype = 'uint32'), (1024, 1280))
+        if not os.path.isfile(self.arrayname):
+            _copy_file(self.arrayname, self.arrayname)
+        return np.reshape(np.fromfile(self.arrayname, dtype = 'uint32'), (1024, 1280))
 
     def get_histograms(self):
         def plot_one(name):
             if not os.path.isfile(name):# or args.reload:
-                get_file(name, name)
+                _copy_file(name, name)
             return np.fromfile(name, dtype = 'uint32')
         pixels = plot_one(self.prefix + 'pixels.dat')
         singles = plot_one(self.prefix + 'singles.dat')
@@ -199,17 +228,16 @@ class DataRun:
         if show:
             plt.show(block = block)
 
-    # TODO: move smoothing into _plot_lineout
     def plot_lineout(self, filter = False, show = False, smooth = 0, rebin = 1,
             error_bars = True, **kwargs):
         """
         kwargs are passed to self.frame.filter.
         """
         if filter:
-            lineout = self.frame.filter(**kwargs).lineout(smooth = smooth)
+            frame = self.frame.filter(**kwargs)
         else:
-            lineout = self.frame.lineout(smooth = smooth)
-        return _plot_lineout(lineout, show = show, rebin = rebin,
+            frame = self.frame
+        return frame.plot_lineout(rebin = rebin, smooth = smooth,
             label = self.prefix, error_bars = error_bars)
 
 
@@ -286,15 +314,17 @@ class RunSet:
         kwargs are passed through to DataRun.filter
         """
         import operator
-        datarun_arrays = [dr.get_frame().get_data() for dr in self.dataruns]
-        frames = list(map(lambda arr: Frame(arr, name = self.name), datarun_arrays))
+        def make_frame(dr):
+            old_frame = dr.get_frame()
+            return Frame(old_frame.get_data(), name = self.name,
+                numExposures = old_frame.numExposures)
+        frames = list(map(make_frame, self.dataruns))
         def framefilter(frame):
             return frame.filter(**kwargs)
         return reduce(operator.add, list(map(framefilter, frames)))
 
 class Frame:
     def __init__(self, array = None, numExposures = 0, name = ''):
-        """Construct using either a DataRun instance, or another Frame."""
         self.data = array
         self.numExposures = numExposures
         self.name = name
@@ -330,12 +360,32 @@ class Frame:
         data[row_outliers[:, np.newaxis] | pixel_outliers] = 0.
         return new
 
-    # TODO: move smooth parameter to _plot_lineout
-    def lineout(self, smooth = 0):
-        from scipy.ndimage.filters import gaussian_filter as gf
-        return gf(np.sum(self.data, axis = 0), smooth)
+    def _raw_lineout(self):
+        return np.sum(self.data, axis = 0)
 
-    def plot_lineout(self, smooth = 0, error_bars = True, rebin = 1):
-        return _plot_lineout(self.lineout(smooth = smooth), error_bars = error_bars,
-            rebin = rebin, label = self.name)
+    def get_lineout(self, rebin = 1, smooth = 0):
+        """
+        Return a smoothed and rebinned lineout of self.data.
+
+        smooth : number of pixel columns by which to smooth
+        rebin : number of pixel columns per bin
+
+        Returns: bin values, intensities
+        """
+        def apply_smooth(arr1d):
+            from scipy.ndimage.filters import gaussian_filter as gf
+            return gf(arr1d, smooth)
+        def apply_rebin(arr1d):
+            return _rebin_spectrum(np.array(range(len(arr1d))), arr1d, rebin = rebin)
+
+        if (not isinstance(rebin, int)) or rebin < 1:
+            raise ValueError("Rebin must be a positive integer")
+
+        return compose(apply_rebin, apply_smooth)(self._raw_lineout())
+
+    def plot_lineout(self, smooth = 0, error_bars = True, rebin = 1, label = None):
+        if label is None:
+            label = self.name
+        return _plot_lineout(*self.get_lineout(rebin = rebin, smooth = smooth),
+            error_bars = error_bars, label = label)
 
