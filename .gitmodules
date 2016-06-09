@@ -1,0 +1,6 @@
+[submodule "xraycam/mpl_plotly"]
+	path = xraycam/mpl_plotly
+	url = https://github.com/hoidn/mpl_plotly
+[submodule "xraycam/utils"]
+	path = xraycam/utils
+	url = https://github.com/hoidn/utils

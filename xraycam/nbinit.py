@@ -11,10 +11,12 @@ from xraycam.camcontrol import plt
 import warnings
 warnings.filterwarnings("ignore",category=DeprecationWarning)
 
-def runset_and_merge(run_prefix, number_runs, run = False, threshold_min = 31, threshold_max =  55, **kwargs):
+def runset_and_merge(run_prefix, numExposures = 1000, run = False, update_interval = 1000, window_min = 31, window_max =  55, threshold_min = 31, threshold_max =  55, **kwargs):
     """Returns a Frame"""
-    runset = camcontrol.RunSet(run_prefix= run_prefix,
-        run = run, number_runs = number_runs, **kwargs)
+    datarun = camcontrol.DataRun(run_prefix= run_prefix,
+       run = run, numExposures = numExposures, update_interval = update_interval,
+        window_min = window_min, window_max = window_max, **kwargs)
+    runset = camcontrol.RunSet([datarun])
     return runset.filter_reduce_frames(threshold_min = threshold_min, threshold_max = threshold_max)
 
 def runset_merge_plot(*args, rebin = 10, smooth = 1, error_bars = True, **kwargs):

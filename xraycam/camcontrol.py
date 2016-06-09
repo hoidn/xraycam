@@ -8,12 +8,18 @@ import pkg_resources
 import os
 import copy
 import pdb
+import subprocess, pipes
+import operator
 
 from functools import reduce
 
-from xraycam.mpl_plotly import plt
-from xraycam import utils
-from xraycam import config
+from . import utils
+from . import config
+
+if config.plotting_mode == 'notebook':
+    from xraycam.mpl_plotly import plt
+else:
+    import matplotlib.pyplot as plt
 
 PKG_NAME = __name__.split('.')[0]
 
@@ -37,6 +43,16 @@ def resource_f(fpath):
 def resource_path(fpath):
     return pkg_resources.resource_filename(PKG_NAME, fpath)
 
+def exists_remote(host, path):
+    """Test if a file exists at path on a host accessible with SSH."""
+    status = subprocess.call(
+        ['ssh', host, 'test -f {}'.format(pipes.quote(path))])
+    if status == 0:
+        return True
+    if status == 1:
+        return False
+    raise Exception('SSH failed')
+
 def _get_destination_dirname(source, dest = None):
     """
     source : file path on the beaglebone relative to detid.base_path
@@ -54,15 +70,27 @@ def _get_destination_dirname(source, dest = None):
     
 def _copy_file(source, dest = None):
     """
-    source : file path on the beaglebone relative to detid.base_path
-    dest : FULL path of the file to be copied (not just the target
+    source : str
+        File path on the beaglebone relative to detid.base_path. If no match is
+        found this function will look for the file path `source + '.part'`, designating
+        a file that is still being written to.
+    dest : str
+        FULL path of the file to be copied (not just the target
     directory.
     """
     dirname = _get_destination_dirname(source, dest)
+    host = 'debian@' + detconfig.BBB_IP
+    path = detconfig.base_path + source
+
     if not os.path.exists(dirname):
         os.makedirs(dirname)
-    os.system('rsync -avz debian@' + detconfig.BBB_IP + ':' +\
-        detconfig.base_path + source + ' ' +  dirname)
+    if exists_remote(host, path):
+        os.system('rsync -avz ' + host + ':' +\
+            path + ' ' +  dirname)
+    else: # try to get the .part file
+        print("{0} not found. \nSearching for {0}.part".format(path))
+        os.system('rsync -avz ' + host + ':' +\
+            path + '.part' + ' ' +  dirname)
 
 def adc_to_eV(adc_values):
     """Generate an energy scale"""
@@ -139,10 +167,23 @@ def _plot_lineout(pixeli, intensity, show = False, label = '', error_bars = True
         plt.show()
     return intensity
 
+def _plot_histogram(values, x = None, show = True,
+        calibrate = True, **kwargs):
+    if x is None:
+        x = np.array(list(range(len(values))))
+    if calibrate:
+        plt.xlabel('Energy (eV)')
+        x = adc_to_eV(x)
+    else:
+        plt.xlabel('ADC value')
+    plt.plot(x, values, **kwargs)
+    if show:
+        plt.show()
+
 class DataRun:
     def __init__(self, run_prefix = 'data/' + 'exposure.' + str(time.time()),\
             run = False, numExposures = 40, threshold = 15, window_min = 0, window_max = 255,\
-            gain = '0x7f', filter_sum = True):
+            gain = '0x7f', filter_sum = True, update_interval = 1000):
         """
         Instantiate a DataRun and optionally run an exposure sequence
         on the BBB.
@@ -172,7 +213,7 @@ class DataRun:
                 raise ValueError("Data file: %s already exists. Please choose a different run prefix." % self.arrayname)
             exposure_cmd = 'time sudo ./main_mt9m001 %d -o ' % threshold + run_prefix\
                 + ' -n ' + str(numExposures) + ' -g ' + gain +\
-                ' -r %d %d' % (window_min, window_max)
+                ' -w %d -r %d %d' % (update_interval, window_min, window_max)
             if filter_sum:
                 exposure_cmd += ' -p'
 
@@ -186,10 +227,15 @@ class DataRun:
             (sshin2, sshout2, ssherr2) = ssh.exec_command('cd' + ' ' + detconfig.base_path\
                 + '; ' + exposure_cmd)
             print(sshout2.read())
+            print(ssherr2.read())
             ssh.close()
 
         self.frame = Frame(array = self.get_array(), name = self.prefix,
             numExposures = self.numExposures)
+
+    @classmethod
+    def from_existing(cls, prefix, numExposures):
+        return cls(run_prefix = prefix, numExposures = numExposures)
 
     def get_frame(self):
         return self.frame
@@ -211,22 +257,14 @@ class DataRun:
         singles = plot_one(self.prefix + 'singles.dat')
         return pixels, singles
 
-    def plot_histograms(self, pixels_plot = True, singles_plot = True, show = True,
-            block = False,  calibrate = True, **kwargs):
+    def plot_histogram(self, cluster_rejection = True, show = True,
+            calibrate = True, **kwargs):
         pixels, singles = self.get_histograms()
-        #plt.ylim((0, np.max(pixels[15:])))
-        x = np.array(list(range(len(pixels))))
-        if calibrate:
-            plt.xlabel('Energy (eV)')
-            x = adc_to_eV(x)
+        if cluster_rejection:
+            values = singles
         else:
-            plt.xlabel('ADC value')
-        if pixels_plot:
-            plt.plot(x, pixels, **kwargs)
-        if singles_plot:
-            plt.plot(x, singles, **kwargs)
-        if show:
-            plt.show(block = block)
+            values = pixels
+        _plot_histogram(values, show = show, calibrate = calibrate, **kwargs)
 
     def plot_lineout(self, filter = False, show = False, smooth = 0, rebin = 1,
             error_bars = True, **kwargs):
@@ -251,7 +289,7 @@ class RunSet:
     """
     Class containing a collection of DataRun instances.
     """
-    def __init__(self, dataruns = None, prefixes = None, number_runs = 0, run_prefix = None, **kwargs):
+    def __init__(self, dataruns):
         """
         dataruns : iterable containing `DataRun` instances.
         prefixes : list of str
@@ -260,23 +298,13 @@ class RunSet:
         run_prefix : str
         
         Instantiate a RunSet  using:
-            (1) `dataruns`, if `dataruns is not None`, OR
+            (1) `dataruns`, if `dataruns` is not `None`, OR
             (2) prefixes, if provided, OR
             (3) `number_runs` and `run_prefix`
         """
-        if dataruns is not None:
-            self.dataruns = dataruns
-        else:
-            if prefixes is None:
-                if run_prefix is None:
-                    prefixes = [str(time.time()) for _ in range(number_runs)]
-                else:
-                    prefixes = [run_prefix + '_%d' % i for i in range(number_runs)]
-            self.dataruns = [DataRun(run_prefix = prefix, **kwargs) for prefix in prefixes]
-        if prefixes is not None:
-            self.name = _longest_common_substring(*prefixes)
-        else:
-            self.name = ''
+        self.dataruns = dataruns
+        self.name = reduce(operator.add, [r.arrayname for r in dataruns])
+        self.numExposures = reduce(operator.add, [r.numExposures for r in dataruns])
 
     def __add__(self, other):
         new = RunSet()
@@ -308,12 +336,11 @@ class RunSet:
 
     def filter_reduce_frames(self, **kwargs):
         """
-        Do artifact filtering for frames of all component data runs and return
+        Do artifact filtering for frames of all component data runs and
         merge all the resulting Frames into a new Frame instance.
 
         kwargs are passed through to DataRun.filter
         """
-        import operator
         def make_frame(dr):
             old_frame = dr.get_frame()
             return Frame(old_frame.get_data(), name = self.name,
@@ -383,9 +410,20 @@ class Frame:
 
         return compose(apply_rebin, apply_smooth)(self._raw_lineout())
 
-    def plot_lineout(self, smooth = 0, error_bars = True, rebin = 1, label = None):
+    def plot_lineout(self, smooth = 0, error_bars = True, rebin = 1, label = None,
+            show = True):
         if label is None:
             label = self.name
         return _plot_lineout(*self.get_lineout(rebin = rebin, smooth = smooth),
-            error_bars = error_bars, label = label)
+            show = show, error_bars = error_bars, label = label)
 
+    def plot_histogram(self, bins = 256, show = True, **kwargs):
+        """
+        Plot and return a histogram of pixel values.
+
+        kwargs are passed to plt.plot.
+        """
+        vals, bins = np.histogram(self.data)
+        y, x = vals, bins[:-1]
+        _plot_histogram(y, x, show = show, **kwargs)
+        return x, y
