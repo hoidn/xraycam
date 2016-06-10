@@ -71,7 +71,7 @@ def _get_destination_dirname(source, dest = None):
 def _copy_file(source, dest = None, partial_suffix = '.part'):
     """
     source : str
-        File path on the beaglebone relative to detid.base_path. If no match is
+        -File path on the beaglebone relative to detid.base_path. If no match is
         found this function will look for the file path `source + partial_suffix`, designating
         a file that is still being written to.
     dest : str
@@ -127,8 +127,8 @@ def _longest_common_substring(s1, *rest):
 @utils.conserve_type
 def _rebin_spectrum(x, y, rebin = 5):
     """
-    Rebin `x` and `y` into arrays of length `int(len(x)/rebin)`. The highest-x
-    bin is dropped in case len(x) isn't a multiple of rebin.
+    Rebin `x` and `y` into arrays of length `int(len(x)/rebin)`. The
+    highest-x bin is dropped in case len(x) isn't a multiple of rebin.
 
     x is assumed to be evenly-spaced and in ascending order.
 
@@ -151,8 +151,9 @@ def _rebin_spectrum(x, y, rebin = 5):
 
 def _get_poisson_uncertainties(intensities):
     """
-    Return the array of Poisson standard deviations, based on photon counting
-    statistics alone, for an array containing summed ADC values.
+    Return the array of Poisson standard deviations, based on photon
+    counting statistics alone, for an array containing summed ADC
+    values.
     """
     return np.sqrt(np.array(intensities)*config.photon_ADC_value)
 
@@ -251,8 +252,8 @@ class DataRun:
 
     def check_complete(self):
         """
-        Return True if this datarun is complete, i.e. if its corresponding file
-        exists locally or on the Beaglebone Black.
+        Return True if this datarun is complete, i.e. if its
+        corresponding file exists locally or on the Beaglebone Black.
         """
         if not self._complete:
             path = detconfig.base_path + self.arrayname
@@ -283,6 +284,11 @@ class DataRun:
         if not self.check_complete():
             return get_and_process(suffix = self._partial_suffix)
         else:
+            time.sleep(.1)
+            # TODO: find out why the expression below raises a
+            # FileNotFoundError despite the previous True return value
+            # of self.check_complete(). The above call to time.sleep is
+            # a provisional patch.
             return get_and_process(suffix = '')
 
     def get_histograms(self):
@@ -336,10 +342,7 @@ class RunSet:
         number_runs : int
         run_prefix : str
         
-        Instantiate a RunSet  using:
-            (1) `dataruns`, if `dataruns` is not `None`, OR
-            (2) prefixes, if provided, OR
-            (3) `number_runs` and `run_prefix`
+        Instantiate a RunSet  using one or more DataRun instances.
         """
         self.dataruns = dataruns
         self.name = reduce(operator.add, [r.arrayname for r in dataruns])
@@ -354,9 +357,9 @@ class RunSet:
         """
         datarun : DataRun
 
-        If datarun is provided, insert is into this RunSet. Otherwise pass
-        args and kwargs to the constructor for DataRun and insert the resulting
-        object into this RunSet.
+        If datarun is provided, insert is into this RunSet. Otherwise
+        pass args and kwargs to the constructor for DataRun and insert
+        the resulting object into this RunSet.
         """
         if datarun is None:
             datarun = DataRun(*args, **kwargs)
@@ -433,8 +436,8 @@ class Frame:
         """
         Return a smoothed and rebinned lineout of self.data.
 
-        smooth : number of pixel columns by which to smooth
-        rebin : number of pixel columns per bin
+        smooth : number of pixel columns by which to smooth rebin :
+        number of pixel columns per bin
 
         Returns: bin values, intensities
         """
