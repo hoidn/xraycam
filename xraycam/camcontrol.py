@@ -476,4 +476,3 @@ class Frame:
         nonzero_flat = flat[flat != 0]
         _plot_histogram(nonzero_flat, show = show,
                 calibrate = calibrate, **kwargs)
-        return x, y
