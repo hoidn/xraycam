@@ -155,7 +155,7 @@ def _get_poisson_uncertainties(intensities):
     counting statistics alone, for an array containing summed ADC
     values.
     """
-    return np.sqrt(np.array(intensities)*config.photon_ADC_value)
+    return np.sqrt(np.array(intensities))
 
 def _plot_lineout(pixeli, intensity, show = False, label = '', error_bars = True):
     if error_bars:
@@ -173,23 +173,26 @@ def _plot_lineout(pixeli, intensity, show = False, label = '', error_bars = True
         plt.show()
     return intensity
 
-def _plot_histogram(values, x = None, show = True,
-        calibrate = True, **kwargs):
-    if x is None:
-        x = np.array(list(range(len(values))))
+def _plot_histogram(values, show = True,
+        calibrate = False, label = '', **kwargs):
+#    if x is None:
+#        x = np.array(list(range(len(values))))
     if calibrate:
         plt.xlabel('Energy (eV)')
-        x = adc_to_eV(x)
+        values = adc_to_eV(values)
+        #x = adc_to_eV(x)
+        #plt.plot(x, values, label = label, **kwargs)
     else:
         plt.xlabel('ADC value')
-    plt.plot(x, values, **kwargs)
+    plt.hist(values, label = label)
     if show:
         plt.show()
 
 class DataRun:
     def __init__(self, run_prefix = 'data/' + 'exposure.' + str(time.time()),\
             run = False, numExposures = 40, threshold = 15, window_min = 0, window_max = 255,\
-            gain = '0x7f', filter_sum = True, update_interval = 1000, block = True):
+            gain = '0x7f', filter_sum = True, update_interval = 1000, block = True,
+            photon_value = 45.):
         """
         Instantiate a DataRun and optionally run an exposure sequence
         on the BBB.
@@ -211,6 +214,7 @@ class DataRun:
         self.filter_sum = filter_sum
         self.prefix = run_prefix
         self.filter_sum = filter_sum
+        self.photon_value = photon_value
 
         self.arrayname= self.prefix + 'sum.dat'
 
@@ -242,7 +246,7 @@ class DataRun:
         if block:
             self._set_complete_state(True)
             self._frame = Frame(array = self.get_array(), name = self.prefix,
-                numExposures = self.numExposures)
+                numExposures = self.numExposures, photon_value = self.photon_value)
         else:
             self._set_complete_state(False)
             self._frame = None
@@ -268,7 +272,7 @@ class DataRun:
     def get_frame(self):
         if self._frame is None or not self.check_complete():
             self._frame = Frame(array = self.get_array(), name = self.prefix,
-                numExposures = self.numExposures)
+                numExposures = self.numExposures, photon_value = self.photon_value)
         return self._frame
 
     def get_array(self):
@@ -323,12 +327,14 @@ class DataRun:
         return frame.plot_lineout(rebin = rebin, smooth = smooth,
             label = self.prefix, error_bars = error_bars)
 
-
     def filter_frame(self, **kwargs):
         self._frame = self.get_frame().filter(**kwargs)
 
     def show(self, **kwargs):
         self.get_frame().show(**kwargs)
+
+    def counts_per_second(self):
+        return np.sum(self.get_frame()._raw_lineout()) / (self.numExposures / config.frames_per_second)
 
 class RunSet:
     """
@@ -393,10 +399,11 @@ class RunSet:
         return reduce(operator.add, list(map(framefilter, frames)))
 
 class Frame:
-    def __init__(self, array = None, numExposures = 0, name = ''):
+    def __init__(self, array = None, numExposures = 0, name = '', photon_value = 45.):
         self.data = array
         self.numExposures = numExposures
         self.name = name
+        self.photon_value = photon_value
 
     def show(self, **kwargs):
         """Show the frame. Kwargs are passed through to plt.imshow."""
@@ -430,7 +437,7 @@ class Frame:
         return new
 
     def _raw_lineout(self):
-        return np.sum(self.data, axis = 0)
+        return np.sum(self.data, axis = 0) / self.photon_value
 
     def get_lineout(self, rebin = 1, smooth = 0):
         """
@@ -459,13 +466,14 @@ class Frame:
         return _plot_lineout(*self.get_lineout(rebin = rebin, smooth = smooth),
             show = show, error_bars = error_bars, label = label)
 
-    def plot_histogram(self, bins = 256, show = True, calibrate = False, **kwargs):
+    def plot_histogram(self, show = True, calibrate = False, **kwargs):
         """
         Plot and return a histogram of pixel values.
 
         kwargs are passed to plt.plot.
         """
-        vals, bins = np.histogram(self.data, bins = bins)
-        y, x = vals, bins[:-1]
-        _plot_histogram(y, x, show = show, calibrate = calibrate, **kwargs)
+        flat = self.data.flatten()
+        nonzero_flat = flat[flat != 0]
+        _plot_histogram(nonzero_flat, show = show,
+                calibrate = calibrate, **kwargs)
         return x, y
