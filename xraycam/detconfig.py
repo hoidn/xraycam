@@ -3,6 +3,9 @@ from collections import namedtuple
 # IP of the Beaglebone currently in use
 BBB_IP = '172.28.188.208'
 
+# user + host
+host = 'debian@' + BBB_IP
+
 # Directory on the BBB in which to run data collection
 base_path = '/home/debian/am335x_pru_package-master/pru_sw/example_apps/BBBcam/mt9001_driver/'
 

@@ -8,12 +8,18 @@ import pkg_resources
 import os
 import copy
 import pdb
+import subprocess, pipes
+import operator
 
 from functools import reduce
 
-from xraycam.mpl_plotly import plt
-from xraycam import utils
-from xraycam import config
+from . import utils
+from . import config
+
+if config.plotting_mode == 'notebook':
+    from xraycam.mpl_plotly import plt
+else:
+    import matplotlib.pyplot as plt
 
 PKG_NAME = __name__.split('.')[0]
 
@@ -37,6 +43,16 @@ def resource_f(fpath):
 def resource_path(fpath):
     return pkg_resources.resource_filename(PKG_NAME, fpath)
 
+def exists_remote(host, path):
+    """Test if a file exists at path on a host accessible with SSH."""
+    status = subprocess.call(
+        ['ssh', host, 'test -f {}'.format(pipes.quote(path))])
+    if status == 0:
+        return True
+    if status == 1:
+        return False
+    raise Exception('SSH failed')
+
 def _get_destination_dirname(source, dest = None):
     """
     source : file path on the beaglebone relative to detid.base_path
@@ -52,17 +68,34 @@ def _get_destination_dirname(source, dest = None):
         dirname = '.'
     return dirname + '/'
     
-def _copy_file(source, dest = None):
+def _copy_file(source, dest = None, partial_suffix = '.part'):
     """
-    source : file path on the beaglebone relative to detid.base_path
-    dest : FULL path of the file to be copied (not just the target
+    source : str
+        -File path on the beaglebone relative to detid.base_path. If no match is
+        found this function will look for the file path `source + partial_suffix`, designating
+        a file that is still being written to.
+    dest : str
+        FULL path of the file to be copied (not just the target
     directory.
+
+    If a file matching `source` is found, return the string 'complete'.
+    If a file matching `source + partial_prefix` is found, return the string 'partial'.
     """
     dirname = _get_destination_dirname(source, dest)
+    host = detconfig.host
+    path = detconfig.base_path + source
+
     if not os.path.exists(dirname):
         os.makedirs(dirname)
-    os.system('rsync -avz debian@' + detconfig.BBB_IP + ':' +\
-        detconfig.base_path + source + ' ' +  dirname)
+    if exists_remote(host, path):
+        os.system('rsync -avz ' + host + ':' +\
+            path + ' ' +  dirname)
+        return 'complete'
+    else: # try to get the .part file
+        print("{0} not found. \nSearching for {0}{1}".format(path, partial_suffix))
+        os.system('rsync -avz ' + host + ':' +\
+            path + partial_suffix + ' ' +  dirname)
+        return 'partial'
 
 def adc_to_eV(adc_values):
     """Generate an energy scale"""
@@ -94,8 +127,8 @@ def _longest_common_substring(s1, *rest):
 @utils.conserve_type
 def _rebin_spectrum(x, y, rebin = 5):
     """
-    Rebin `x` and `y` into arrays of length `int(len(x)/rebin)`. The highest-x
-    bin is dropped in case len(x) isn't a multiple of rebin.
+    Rebin `x` and `y` into arrays of length `int(len(x)/rebin)`. The
+    highest-x bin is dropped in case len(x) isn't a multiple of rebin.
 
     x is assumed to be evenly-spaced and in ascending order.
 
@@ -118,10 +151,11 @@ def _rebin_spectrum(x, y, rebin = 5):
 
 def _get_poisson_uncertainties(intensities):
     """
-    Return the array of Poisson standard deviations, based on photon counting
-    statistics alone, for an array containing summed ADC values.
+    Return the array of Poisson standard deviations, based on photon
+    counting statistics alone, for an array containing summed ADC
+    values.
     """
-    return np.sqrt(np.array(intensities)*config.photon_ADC_value)
+    return np.sqrt(np.array(intensities))
 
 def _plot_lineout(pixeli, intensity, show = False, label = '', error_bars = True):
     if error_bars:
@@ -139,10 +173,26 @@ def _plot_lineout(pixeli, intensity, show = False, label = '', error_bars = True
         plt.show()
     return intensity
 
+def _plot_histogram(values, show = True,
+        calibrate = False, label = '', **kwargs):
+#    if x is None:
+#        x = np.array(list(range(len(values))))
+    if calibrate:
+        plt.xlabel('Energy (eV)')
+        values = adc_to_eV(values)
+        #x = adc_to_eV(x)
+        #plt.plot(x, values, label = label, **kwargs)
+    else:
+        plt.xlabel('ADC value')
+    plt.hist(values, label = label)
+    if show:
+        plt.show()
+
 class DataRun:
     def __init__(self, run_prefix = 'data/' + 'exposure.' + str(time.time()),\
             run = False, numExposures = 40, threshold = 15, window_min = 0, window_max = 255,\
-            gain = '0x7f', filter_sum = True):
+            gain = '0x7f', filter_sum = True, update_interval = 1000, block = True,
+            photon_value = 45.):
         """
         Instantiate a DataRun and optionally run an exposure sequence
         on the BBB.
@@ -164,15 +214,18 @@ class DataRun:
         self.filter_sum = filter_sum
         self.prefix = run_prefix
         self.filter_sum = filter_sum
+        self.photon_value = photon_value
 
         self.arrayname= self.prefix + 'sum.dat'
+
+        self._partial_suffix = '.part'
 
         if run:
             if os.path.exists(self.arrayname):
                 raise ValueError("Data file: %s already exists. Please choose a different run prefix." % self.arrayname)
             exposure_cmd = 'time sudo ./main_mt9m001 %d -o ' % threshold + run_prefix\
                 + ' -n ' + str(numExposures) + ' -g ' + gain +\
-                ' -r %d %d' % (window_min, window_max)
+                ' -w %d -r %d %d' % (update_interval, window_min, window_max)
             if filter_sum:
                 exposure_cmd += ' -p'
 
@@ -185,24 +238,66 @@ class DataRun:
             #take an exposure
             (sshin2, sshout2, ssherr2) = ssh.exec_command('cd' + ' ' + detconfig.base_path\
                 + '; ' + exposure_cmd)
-            print(sshout2.read())
+            if block:
+                print(sshout2.read())
+                print(ssherr2.read())
             ssh.close()
 
-        self.frame = Frame(array = self.get_array(), name = self.prefix,
-            numExposures = self.numExposures)
+        if block:
+            self._set_complete_state(True)
+            self._frame = Frame(array = self.get_array(), name = self.prefix,
+                numExposures = self.numExposures, photon_value = self.photon_value)
+        else:
+            self._set_complete_state(False)
+            self._frame = None
+
+    def _set_complete_state(self, state):
+        self._complete = state
+
+    def check_complete(self):
+        """
+        Return True if this datarun is complete, i.e. if its
+        corresponding file exists locally or on the Beaglebone Black.
+        """
+        if not self._complete:
+            path = detconfig.base_path + self.arrayname
+            if os.path.isfile(self.arrayname) or exists_remote(detconfig.host, path):
+                self._complete = True
+        return self._complete
+
+    @classmethod
+    def from_existing(cls, prefix, numExposures):
+        return cls(run_prefix = prefix, numExposures = numExposures)
 
     def get_frame(self):
-        return self.frame
+        if self._frame is None or not self.check_complete():
+            self._frame = Frame(array = self.get_array(), name = self.prefix,
+                numExposures = self.numExposures, photon_value = self.photon_value)
+        return self._frame
 
     def get_array(self):
         """
         Get the sum of exposures for a dataset prefix as a numpy array
         """
+        def get_and_process(suffix = ''):
+            return np.reshape(np.fromfile(self.arrayname + suffix, dtype = 'uint32'), (1024, 1280))
+
         if not os.path.isfile(self.arrayname):
-            _copy_file(self.arrayname, self.arrayname)
-        return np.reshape(np.fromfile(self.arrayname, dtype = 'uint32'), (1024, 1280))
+            if _copy_file(self.arrayname, self.arrayname) == 'complete':
+                self._set_complete_state(True)
+        if not self.check_complete():
+            return get_and_process(suffix = self._partial_suffix)
+        else:
+            time.sleep(.1)
+            # TODO: find out why the expression below raises a
+            # FileNotFoundError despite the previous True return value
+            # of self.check_complete(). The above call to time.sleep is
+            # a provisional patch.
+            return get_and_process(suffix = '')
 
     def get_histograms(self):
+        if not self.check_complete():
+            raise Exception("Histogram data not available during readout.")
         def plot_one(name):
             if not os.path.isfile(name):# or args.reload:
                 _copy_file(name, name)
@@ -211,22 +306,14 @@ class DataRun:
         singles = plot_one(self.prefix + 'singles.dat')
         return pixels, singles
 
-    def plot_histograms(self, pixels_plot = True, singles_plot = True, show = True,
-            block = False,  calibrate = True, **kwargs):
+    def plot_histogram(self, cluster_rejection = True, show = True,
+            calibrate = True, **kwargs):
         pixels, singles = self.get_histograms()
-        #plt.ylim((0, np.max(pixels[15:])))
-        x = np.array(list(range(len(pixels))))
-        if calibrate:
-            plt.xlabel('Energy (eV)')
-            x = adc_to_eV(x)
+        if cluster_rejection:
+            values = singles
         else:
-            plt.xlabel('ADC value')
-        if pixels_plot:
-            plt.plot(x, pixels, **kwargs)
-        if singles_plot:
-            plt.plot(x, singles, **kwargs)
-        if show:
-            plt.show(block = block)
+            values = pixels
+        _plot_histogram(values, show = show, calibrate = calibrate, **kwargs)
 
     def plot_lineout(self, filter = False, show = False, smooth = 0, rebin = 1,
             error_bars = True, **kwargs):
@@ -234,24 +321,26 @@ class DataRun:
         kwargs are passed to self.frame.filter.
         """
         if filter:
-            frame = self.frame.filter(**kwargs)
+            frame = self.get_frame().filter(**kwargs)
         else:
-            frame = self.frame
+            frame = self.get_frame()
         return frame.plot_lineout(rebin = rebin, smooth = smooth,
             label = self.prefix, error_bars = error_bars)
 
-
     def filter_frame(self, **kwargs):
-        self.frame = self.frame.filter(**kwargs)
+        self._frame = self.get_frame().filter(**kwargs)
 
     def show(self, **kwargs):
-        self.frame.show(**kwargs)
+        self.get_frame().show(**kwargs)
+
+    def counts_per_second(self):
+        return np.sum(self.get_frame()._raw_lineout()) / (self.numExposures / config.frames_per_second)
 
 class RunSet:
     """
     Class containing a collection of DataRun instances.
     """
-    def __init__(self, dataruns = None, prefixes = None, number_runs = 0, run_prefix = None, **kwargs):
+    def __init__(self, dataruns):
         """
         dataruns : iterable containing `DataRun` instances.
         prefixes : list of str
@@ -259,24 +348,11 @@ class RunSet:
         number_runs : int
         run_prefix : str
         
-        Instantiate a RunSet  using:
-            (1) `dataruns`, if `dataruns is not None`, OR
-            (2) prefixes, if provided, OR
-            (3) `number_runs` and `run_prefix`
+        Instantiate a RunSet  using one or more DataRun instances.
         """
-        if dataruns is not None:
-            self.dataruns = dataruns
-        else:
-            if prefixes is None:
-                if run_prefix is None:
-                    prefixes = [str(time.time()) for _ in range(number_runs)]
-                else:
-                    prefixes = [run_prefix + '_%d' % i for i in range(number_runs)]
-            self.dataruns = [DataRun(run_prefix = prefix, **kwargs) for prefix in prefixes]
-        if prefixes is not None:
-            self.name = _longest_common_substring(*prefixes)
-        else:
-            self.name = ''
+        self.dataruns = dataruns
+        self.name = reduce(operator.add, [r.arrayname for r in dataruns])
+        self.numExposures = reduce(operator.add, [r.numExposures for r in dataruns])
 
     def __add__(self, other):
         new = RunSet()
@@ -287,9 +363,9 @@ class RunSet:
         """
         datarun : DataRun
 
-        If datarun is provided, insert is into this RunSet. Otherwise pass
-        args and kwargs to the constructor for DataRun and insert the resulting
-        object into this RunSet.
+        If datarun is provided, insert is into this RunSet. Otherwise
+        pass args and kwargs to the constructor for DataRun and insert
+        the resulting object into this RunSet.
         """
         if datarun is None:
             datarun = DataRun(*args, **kwargs)
@@ -308,12 +384,11 @@ class RunSet:
 
     def filter_reduce_frames(self, **kwargs):
         """
-        Do artifact filtering for frames of all component data runs and return
+        Do artifact filtering for frames of all component data runs and
         merge all the resulting Frames into a new Frame instance.
 
         kwargs are passed through to DataRun.filter
         """
-        import operator
         def make_frame(dr):
             old_frame = dr.get_frame()
             return Frame(old_frame.get_data(), name = self.name,
@@ -324,10 +399,11 @@ class RunSet:
         return reduce(operator.add, list(map(framefilter, frames)))
 
 class Frame:
-    def __init__(self, array = None, numExposures = 0, name = ''):
+    def __init__(self, array = None, numExposures = 0, name = '', photon_value = 45.):
         self.data = array
         self.numExposures = numExposures
         self.name = name
+        self.photon_value = photon_value
 
     def show(self, **kwargs):
         """Show the frame. Kwargs are passed through to plt.imshow."""
@@ -361,14 +437,14 @@ class Frame:
         return new
 
     def _raw_lineout(self):
-        return np.sum(self.data, axis = 0)
+        return np.sum(self.data, axis = 0) / self.photon_value
 
     def get_lineout(self, rebin = 1, smooth = 0):
         """
         Return a smoothed and rebinned lineout of self.data.
 
-        smooth : number of pixel columns by which to smooth
-        rebin : number of pixel columns per bin
+        smooth : number of pixel columns by which to smooth rebin :
+        number of pixel columns per bin
 
         Returns: bin values, intensities
         """
@@ -383,9 +459,20 @@ class Frame:
 
         return compose(apply_rebin, apply_smooth)(self._raw_lineout())
 
-    def plot_lineout(self, smooth = 0, error_bars = True, rebin = 1, label = None):
+    def plot_lineout(self, smooth = 0, error_bars = True, rebin = 1, label = '',
+            show = True):
         if label is None:
             label = self.name
         return _plot_lineout(*self.get_lineout(rebin = rebin, smooth = smooth),
-            error_bars = error_bars, label = label)
+            show = show, error_bars = error_bars, label = label)
 
+    def plot_histogram(self, show = True, calibrate = False, **kwargs):
+        """
+        Plot and return a histogram of pixel values.
+
+        kwargs are passed to plt.plot.
+        """
+        flat = self.data.flatten()
+        nonzero_flat = flat[flat != 0]
+        _plot_histogram(nonzero_flat, show = show,
+                calibrate = calibrate, **kwargs)
