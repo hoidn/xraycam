@@ -54,7 +54,7 @@ def test_compose():
 #    assert npcomp(frame.get_lineout(rebin = 500), [np.array([ 249.5,  749.5]), np.array([ 75983, 711786], dtype='uint64')])
 
 def test_runset():
-    frame = runset_and_merge('data/5.6.real1_', 1, gain = '0x3f', run = False,
+    frame = runset_and_merge('data/5.6.real1__1', gain = '0x3f', run = False,
         window_min = 31, window_max = 55, threshold_min = 31, threshold_max = 55, numExposures = 1000)
     assert frame.numExposures > 0
 
@@ -62,10 +62,14 @@ def test_exisiting_data():
     import time
     import pytest
     tname = str(time.time())
-    test_frame = runset_and_merge(tname, 1, gain = '0x3f', run = True, window_min = 31,
-        window_max = 55, numExposures = 40,  threshold_min = 31, threshold_max = 55)
+    test_frame = runset_and_merge(tname, gain = '0x3f', run = True, window_min = 31,
+        window_max = 55, numExposures = 40,  threshold_min = 31, threshold_max = 55,
+        update_interval = 40)
+    test_run = camcontrol.DataRun(tname, run = False)
+    assert test_run.check_complete()
     with pytest.raises(Exception) as e_info:
-        test_frame = runset_and_merge(tname, 1, gain = '0x3f', run = True, window_min = 31,
-            window_max = 55, numExposures = 40,  threshold_min = 31, threshold_max = 55)
+        test_frame = runset_and_merge(tname, gain = '0x3f', run = True, window_min = 31,
+            window_max = 55, numExposures = 40,  threshold_min = 31, threshold_max = 55,
+            update_interval = 40)
        
     
