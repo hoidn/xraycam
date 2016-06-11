@@ -2,6 +2,7 @@ import numpy as np
 import time
 
 from xraycam import camcontrol
+from xraycam import config
 from xraycam.nbinit import *
 
 
@@ -64,12 +65,16 @@ def test_exisiting_data():
     tname = str(time.time())
     test_frame = runset_and_merge(tname, gain = '0x3f', run = True, window_min = 31,
         window_max = 55, numExposures = 40,  threshold_min = 31, threshold_max = 55,
-        update_interval = 40)
+        update_interval = 40, block = True)
     test_run = camcontrol.DataRun(tname, run = False)
     assert test_run.check_complete()
     with pytest.raises(Exception) as e_info:
         test_frame = runset_and_merge(tname, gain = '0x3f', run = True, window_min = 31,
             window_max = 55, numExposures = 40,  threshold_min = 31, threshold_max = 55,
-            update_interval = 40)
-       
-    
+            update_interval = 40, block = True)
+
+def test_number_exposures():
+    run = camcontrol.DataRun('foobar', numExposures = 100)
+    assert run.numExposures == 100
+    run2 = camcontrol.DataRun('foobar2', htime = '3h')
+    assert run2.numExposures == 10800 * int(config.frames_per_second)
