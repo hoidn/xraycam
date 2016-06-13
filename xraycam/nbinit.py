@@ -20,9 +20,8 @@ def runset_and_merge(run_prefix, numExposures = 1000, run = False, update_interv
     return runset.filter_reduce_frames(threshold_min = threshold_min, threshold_max = threshold_max)
 
 def datarun_and_frame(run_prefix, numExposures = 1000, run = False, update_interval = 1000,
-        window_min = 31, window_max =  55, threshold_min = 31, threshold_max =  55,
-        photon_value = 45., lineout = True, rebin = 10, smooth = 1, error_bars = True, post_filter = True,
-        **kwargs):
+        window_min = 31, window_max =  55, photon_value = 45., lineout = True, rebin = 10,
+        smooth = 1, error_bars = True, post_filter = True, **kwargs):
     datarun = camcontrol.DataRun(run_prefix= run_prefix,
        run = run, numExposures = numExposures, update_interval = update_interval,
         window_min = window_min, window_max = window_max, photon_value = photon_value,

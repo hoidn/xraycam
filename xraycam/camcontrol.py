@@ -189,10 +189,10 @@ def _plot_histogram(values, show = True,
         plt.show()
 
 class DataRun:
-    def __init__(self, run_prefix = 'data/' + 'exposure.' + str(time.time()),\
-            run = False, numExposures = 40, threshold = 15, window_min = 0, window_max = 255,\
-            gain = '0x7f', filter_sum = True, update_interval = 1000, block = True,
-            photon_value = 45.):
+    def __init__(self, run_prefix = 'data/' + 'exposure.' + str(time.time()),
+            run = False, numExposures = 40, htime = None, threshold = 15,
+            window_min = 0, window_max = 255, gain = '0x7f', filter_sum = True,
+            update_interval = 1000, block = False, photon_value = 45.):
         """
         Instantiate a DataRun and optionally run an exposure sequence
         on the BBB.
@@ -203,6 +203,11 @@ class DataRun:
         reload : bool
             If true, run an exposure sequence. (If false, we assume that output files
             with the name prefix: run_prefix + run_name already exist on the BBB). 
+        htime : str
+            Time duration of the data acquisition if `run == True`, in a humanfriendly
+            format, for example '3m' or '1h'. Overrides numExposures if provided.
+        numExposures : int
+            Number of exposures in the data acquisition if `run == True`.
 
         Raises ValueError if data corresponding to the run_prefix parameter already
         exists locally.
@@ -210,15 +215,17 @@ class DataRun:
         """
         self.gain = gain
         self.threshold = threshold
-        self.numExposures = numExposures
         self.filter_sum = filter_sum
         self.prefix = run_prefix
         self.filter_sum = filter_sum
         self.photon_value = photon_value
 
         self.arrayname= self.prefix + 'sum.dat'
-
         self._partial_suffix = '.part'
+        if not htime:
+            self.numExposures = numExposures
+        else:
+            self.numExposures = self.time_to_numexposures(htime)
 
         if run:
             if os.path.exists(self.arrayname):
@@ -229,11 +236,9 @@ class DataRun:
             if filter_sum:
                 exposure_cmd += ' -p'
 
-            #keypath = resource_path('data/id_rsa.pub')
-
             ssh = SSHClient()
             ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            ssh.connect(detconfig.BBB_IP, 22, 'debian', password = 'bbb')
+            ssh.connect(detconfig.BBB_IP, 22, detconfig.user, password = detconfig.password)
 
             #take an exposure
             (sshin2, sshout2, ssherr2) = ssh.exec_command('cd' + ' ' + detconfig.base_path\
@@ -245,11 +250,10 @@ class DataRun:
 
         if block:
             self._set_complete_state(True)
-            self._frame = Frame(array = self.get_array(), name = self.prefix,
-                numExposures = self.numExposures, photon_value = self.photon_value)
         else:
             self._set_complete_state(False)
-            self._frame = None
+
+        self._frame = None
 
     def _set_complete_state(self, state):
         self._complete = state
@@ -265,9 +269,16 @@ class DataRun:
                 self._complete = True
         return self._complete
 
-    @classmethod
-    def from_existing(cls, prefix, numExposures):
-        return cls(run_prefix = prefix, numExposures = numExposures)
+    @staticmethod
+    def time_to_numexposures(timestring):
+        """
+        Convert a human-readable time string (e.g. '3m', '1h', etc.) to a number of exposures.
+        """
+        import humanfriendly
+        def roundup(x):
+            return int(np.ceil(x / 10.0)) * 10
+        return roundup(config.frames_per_second * humanfriendly.parse_timespan(timestring))
+
 
     def get_frame(self):
         if self._frame is None or not self.check_complete():
@@ -308,6 +319,9 @@ class DataRun:
 
     def plot_histogram(self, cluster_rejection = True, show = True,
             calibrate = True, **kwargs):
+        """
+        Plot histogram output from the camera acquisition.
+        """
         pixels, singles = self.get_histograms()
         if cluster_rejection:
             values = singles
@@ -315,25 +329,17 @@ class DataRun:
             values = pixels
         _plot_histogram(values, show = show, calibrate = calibrate, **kwargs)
 
-    def plot_lineout(self, filter = False, show = False, smooth = 0, rebin = 1,
-            error_bars = True, **kwargs):
+    def plot_lineout(self, **kwargs):
         """
         kwargs are passed to self.frame.filter.
         """
-        if filter:
-            frame = self.get_frame().filter(**kwargs)
-        else:
-            frame = self.get_frame()
-        return frame.plot_lineout(rebin = rebin, smooth = smooth,
-            label = self.prefix, error_bars = error_bars)
-
-    def filter_frame(self, **kwargs):
-        self._frame = self.get_frame().filter(**kwargs)
+        return self.get_frame().plot_lineout(**kwargs)
 
     def show(self, **kwargs):
         self.get_frame().show(**kwargs)
 
     def counts_per_second(self):
+        return self.get_frame().counts_per_second()
         return np.sum(self.get_frame()._raw_lineout()) / (self.numExposures / config.frames_per_second)
 
 class RunSet:
@@ -476,3 +482,9 @@ class Frame:
         nonzero_flat = flat[flat != 0]
         _plot_histogram(nonzero_flat, show = show,
                 calibrate = calibrate, **kwargs)
+
+    def counts_per_second(self):
+        """
+        Return average counts per second the exposures that constitute this Frame.
+        """
+        return np.sum(self._raw_lineout()) / (self.numExposures / config.frames_per_second)
