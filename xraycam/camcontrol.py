@@ -192,7 +192,7 @@ class DataRun:
     def __init__(self, run_prefix = 'data/' + 'exposure.' + str(time.time()),
             run = False, numExposures = 40, htime = None, threshold = 15,
             window_min = 0, window_max = 255, gain = '0x7f', filter_sum = True,
-            update_interval = 1000, block = False, photon_value = 45.):
+            update_interval = 80, block = False, photon_value = 45.):
         """
         Instantiate a DataRun and optionally run an exposure sequence
         on the BBB.
@@ -246,6 +246,8 @@ class DataRun:
             if block:
                 print(sshout2.read())
                 print(ssherr2.read())
+            elif run:
+                time.sleep(float(update_interval) / config.frames_per_second + 3)
             ssh.close()
 
         if block:
