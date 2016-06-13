@@ -30,7 +30,8 @@ def datarun_and_frame(run_prefix, numExposures = 1000, run = False, update_inter
         window_min = window_min, window_max = window_max, photon_value = photon_value,
         **kwargs)
     
-    time.sleep(float(update_interval) / config.frames_per_second + 1)
+    if run:
+        time.sleep(float(update_interval) / config.frames_per_second + 5)
     if post_filter:
         frame = datarun.get_frame().filter(threshold_min = window_min, threshold_max = window_max)
     else:
