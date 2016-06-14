@@ -260,14 +260,21 @@ class DataRun:
     def _set_complete_state(self, state):
         self._complete = state
 
-    def check_complete(self):
+    def check_acq_complete(self):
         """
-        Return True if this datarun is complete, i.e. if its
-        corresponding file exists locally or on the Beaglebone Black.
+        Return True if this datarun's acquisisition is complete, i.e. if its
+        final data exists locally or on the Beaglebone Black. If the acquisition
+        between the previous invocation of this method and the current one, it
+        re-instantiates self._frame using finalized data.
         """
         if not self._complete:
             path = detconfig.base_path + self.arrayname
             if os.path.isfile(self.arrayname) or exists_remote(detconfig.host, path):
+                # update self._frame
+                # TODO: get rid of self._frame (i.e. reorganize the associated data access using
+                # a functional style.
+                self._frame = Frame(array = self.get_array(), name = self.prefix,
+                    numExposures = self.numExposures, photon_value = self.photon_value)
                 self._complete = True
         return self._complete
 
@@ -283,7 +290,7 @@ class DataRun:
 
 
     def get_frame(self):
-        if self._frame is None or not self.check_complete():
+        if self._frame is None or not self.check_acq_complete():
             self._frame = Frame(array = self.get_array(), name = self.prefix,
                 numExposures = self.numExposures, photon_value = self.photon_value)
         return self._frame
@@ -295,21 +302,18 @@ class DataRun:
         def get_and_process(suffix = ''):
             return np.reshape(np.fromfile(self.arrayname + suffix, dtype = 'uint32'), (1024, 1280))
 
-        if not os.path.isfile(self.arrayname):
-            if _copy_file(self.arrayname, self.arrayname) == 'complete':
-                self._set_complete_state(True)
-        if not self.check_complete():
+        if not self.check_acq_complete():
             return get_and_process(suffix = self._partial_suffix)
         else:
             time.sleep(.1)
             # TODO: find out why the expression below raises a
             # FileNotFoundError despite the previous True return value
-            # of self.check_complete(). The above call to time.sleep is
+            # of self.check_acq_complete(). The above call to time.sleep is
             # a provisional patch.
             return get_and_process(suffix = '')
 
     def get_histograms(self):
-        if not self.check_complete():
+        if not self.check_acq_complete():
             raise Exception("Histogram data not available during readout.")
         def plot_one(name):
             if not os.path.isfile(name):# or args.reload:
