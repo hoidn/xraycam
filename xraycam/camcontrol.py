@@ -21,6 +21,9 @@ if config.plotting_mode == 'notebook':
 else:
     import matplotlib.pyplot as plt
 
+# TODO: set up keypair authentication at first usage of the package, if necessary,
+# or else simply switch to using password authentication throughout. 
+
 PKG_NAME = __name__.split('.')[0]
 
 # from https://gist.github.com/rossdylan/3287138
@@ -231,7 +234,7 @@ class DataRun:
             if os.path.exists(self.arrayname):
                 raise ValueError("Data file: %s already exists. Please choose a different run prefix." % self.arrayname)
             exposure_cmd = 'time sudo ./main_mt9m001 %d -o ' % threshold + run_prefix\
-                + ' -n ' + str(numExposures) + ' -g ' + gain +\
+                + ' -n ' + str(self.numExposures) + ' -g ' + gain +\
                 ' -w %d -r %d %d' % (update_interval, window_min, window_max)
             if filter_sum:
                 exposure_cmd += ' -p'
