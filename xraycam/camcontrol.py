@@ -188,7 +188,8 @@ def _plot_histogram(values, show = True,
         #plt.plot(x, values, label = label, **kwargs)
     else:
         plt.xlabel('ADC value')
-    plt.hist(values, label = label)
+    # TODO: make mpl_plotly interpret the kwarg `bins` (instead of `nbinsx`)
+    plt.hist(values, label = label, **kwargs)
     if show:
         plt.show()
 
