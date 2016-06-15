@@ -224,6 +224,7 @@ class DataRun:
         self.filter_sum = filter_sum
         self.photon_value = photon_value
 
+        self._time_start = time.time()
         self.arrayname= self.prefix + 'sum.dat'
         self._partial_suffix = '.part'
         if not htime:
@@ -260,6 +261,10 @@ class DataRun:
             self._set_complete_state(False)
 
         self._frame = None
+
+    def _acquisistion_time(self):
+        return min(time.time() - self._time_start,
+                float(self.numExposures) / config.frames_per_second)
 
     def _set_complete_state(self, state):
         self._complete = state
@@ -340,9 +345,8 @@ class DataRun:
     def show(self, **kwargs):
         self.get_frame().show(**kwargs)
 
-    def counts_per_second(self):
-        return self.get_frame().counts_per_second()
-        return np.sum(self.get_frame()._raw_lineout()) / (self.numExposures / config.frames_per_second)
+    def counts_per_second(self, **kwargs):
+        return self.get_frame().counts_per_second(elapsed = self._acquisistion_time(), **kwargs)
 
 class RunSet:
     """
@@ -485,8 +489,10 @@ class Frame:
         _plot_histogram(nonzero_flat, show = show,
                 calibrate = calibrate, **kwargs)
 
-    def counts_per_second(self):
+    def counts_per_second(self, elapsed = None, start = 0, end = -1):
         """
         Return average counts per second the exposures that constitute this Frame.
         """
-        return np.sum(self._raw_lineout()) / (self.numExposures / config.frames_per_second)
+        if elapsed is None:
+            elapsed = self.numExposures / config.frames_per_second
+        return np.sum(self._raw_lineout()[start:end]) / elapsed
