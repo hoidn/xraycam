@@ -217,6 +217,7 @@ class DataRun:
         exists locally.
         TODO: etc..
         """
+        self.run = run
         self.gain = gain
         self.threshold = threshold
         self.filter_sum = filter_sum
@@ -263,8 +264,12 @@ class DataRun:
         self._frame = None
 
     def _acquisistion_time(self):
-        return min(time.time() - self._time_start,
-                float(self.numExposures) / config.frames_per_second)
+        default = float(self.numExposures) / config.frames_per_second) 
+        if self.run == False:
+            return default
+        else:
+            return min(time.time() - self._time_start,
+                
 
     def _set_complete_state(self, state):
         self._complete = state
