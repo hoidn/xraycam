@@ -23,6 +23,7 @@ else:
 
 # TODO: set up keypair authentication at first usage of the package, if necessary,
 # or else simply switch to using password authentication throughout. 
+# TODO: add tests that enforce the right update behavior.
 
 PKG_NAME = __name__.split('.')[0]
 
@@ -286,11 +287,11 @@ class DataRun:
 
 
     def get_frame(self):
-        if self._frame is None or not self.check_complete():
-            self._frame = Frame(array = self.get_array(), name = self.prefix,
-                numExposures = self.numExposures, photon_value = self.photon_value)
+        self._frame = Frame(array = self.get_array(), name = self.prefix,
+            numExposures = self.numExposures, photon_value = self.photon_value)
         return self._frame
 
+    @utils.memoize_timeout(timeout = 10)
     def get_array(self):
         """
         Get the sum of exposures for a dataset prefix as a numpy array
@@ -301,14 +302,10 @@ class DataRun:
         if not os.path.isfile(self.arrayname):
             if _copy_file(self.arrayname, self.arrayname) == 'complete':
                 self._set_complete_state(True)
-        if not self.check_complete():
-            return get_and_process(suffix = self._partial_suffix)
+                return get_and_process(suffix = '')
+            else:
+                return get_and_process(suffix = self._partial_suffix)
         else:
-            time.sleep(.1)
-            # TODO: find out why the expression below raises a
-            # FileNotFoundError despite the previous True return value
-            # of self.check_complete(). The above call to time.sleep is
-            # a provisional patch.
             return get_and_process(suffix = '')
 
     def get_histograms(self):
