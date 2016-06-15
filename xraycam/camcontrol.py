@@ -268,7 +268,7 @@ class DataRun:
         if self.run == False:
             return default
         else:
-            return min(time.time() - self._time_start,
+            return min(time.time() - self._time_start, default)
                 
 
     def _set_complete_state(self, state):
