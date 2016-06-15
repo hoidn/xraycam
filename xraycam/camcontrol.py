@@ -264,7 +264,7 @@ class DataRun:
         self._frame = None
 
     def _acquisistion_time(self):
-        default = float(self.numExposures) / config.frames_per_second) 
+        default = float(self.numExposures) / config.frames_per_second
         if self.run == False:
             return default
         else:
