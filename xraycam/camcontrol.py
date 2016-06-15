@@ -21,6 +21,10 @@ if config.plotting_mode == 'notebook':
 else:
     import matplotlib.pyplot as plt
 
+# TODO: set up keypair authentication at first usage of the package, if necessary,
+# or else simply switch to using password authentication throughout. 
+# TODO: add tests that enforce the right update behavior.
+
 PKG_NAME = __name__.split('.')[0]
 
 # from https://gist.github.com/rossdylan/3287138
@@ -220,6 +224,7 @@ class DataRun:
         self.filter_sum = filter_sum
         self.photon_value = photon_value
 
+        self._time_start = time.time()
         self.arrayname= self.prefix + 'sum.dat'
         self._partial_suffix = '.part'
         if not htime:
@@ -231,7 +236,7 @@ class DataRun:
             if os.path.exists(self.arrayname):
                 raise ValueError("Data file: %s already exists. Please choose a different run prefix." % self.arrayname)
             exposure_cmd = 'time sudo ./main_mt9m001 %d -o ' % threshold + run_prefix\
-                + ' -n ' + str(numExposures) + ' -g ' + gain +\
+                + ' -n ' + str(self.numExposures) + ' -g ' + gain +\
                 ' -w %d -r %d %d' % (update_interval, window_min, window_max)
             if filter_sum:
                 exposure_cmd += ' -p'
@@ -257,24 +262,21 @@ class DataRun:
 
         self._frame = None
 
+    def _acquisistion_time(self):
+        return min(time.time() - self._time_start,
+                float(self.numExposures) / config.frames_per_second)
+
     def _set_complete_state(self, state):
         self._complete = state
 
-    def check_acq_complete(self):
+    def check_complete(self):
         """
-        Return True if this datarun's acquisisition is complete, i.e. if its
-        final data exists locally or on the Beaglebone Black. If the acquisition
-        between the previous invocation of this method and the current one, it
-        re-instantiates self._frame using finalized data.
+        Return True if this datarun is complete, i.e. if its
+        corresponding file exists locally or on the Beaglebone Black.
         """
         if not self._complete:
             path = detconfig.base_path + self.arrayname
             if os.path.isfile(self.arrayname) or exists_remote(detconfig.host, path):
-                # update self._frame
-                # TODO: get rid of self._frame (i.e. reorganize the associated data access using
-                # a functional style.
-                self._frame = Frame(array = self.get_array(), name = self.prefix,
-                    numExposures = self.numExposures, photon_value = self.photon_value)
                 self._complete = True
         return self._complete
 
@@ -290,11 +292,11 @@ class DataRun:
 
 
     def get_frame(self):
-        if self._frame is None or not self.check_acq_complete():
-            self._frame = Frame(array = self.get_array(), name = self.prefix,
-                numExposures = self.numExposures, photon_value = self.photon_value)
+        self._frame = Frame(array = self.get_array(), name = self.prefix,
+            numExposures = self.numExposures, photon_value = self.photon_value)
         return self._frame
 
+    @utils.memoize_timeout(timeout = 10)
     def get_array(self):
         """
         Get the sum of exposures for a dataset prefix as a numpy array
@@ -302,18 +304,17 @@ class DataRun:
         def get_and_process(suffix = ''):
             return np.reshape(np.fromfile(self.arrayname + suffix, dtype = 'uint32'), (1024, 1280))
 
-        if not self.check_acq_complete():
-            return get_and_process(suffix = self._partial_suffix)
+        if not os.path.isfile(self.arrayname):
+            if _copy_file(self.arrayname, self.arrayname) == 'complete':
+                self._set_complete_state(True)
+                return get_and_process(suffix = '')
+            else:
+                return get_and_process(suffix = self._partial_suffix)
         else:
-            time.sleep(.1)
-            # TODO: find out why the expression below raises a
-            # FileNotFoundError despite the previous True return value
-            # of self.check_acq_complete(). The above call to time.sleep is
-            # a provisional patch.
             return get_and_process(suffix = '')
 
     def get_histograms(self):
-        if not self.check_acq_complete():
+        if not self.check_complete():
             raise Exception("Histogram data not available during readout.")
         def plot_one(name):
             if not os.path.isfile(name):# or args.reload:
@@ -344,9 +345,8 @@ class DataRun:
     def show(self, **kwargs):
         self.get_frame().show(**kwargs)
 
-    def counts_per_second(self):
-        return self.get_frame().counts_per_second()
-        return np.sum(self.get_frame()._raw_lineout()) / (self.numExposures / config.frames_per_second)
+    def counts_per_second(self, **kwargs):
+        return self.get_frame().counts_per_second(elapsed = self._acquisistion_time(), **kwargs)
 
 class RunSet:
     """
@@ -489,8 +489,10 @@ class Frame:
         _plot_histogram(nonzero_flat, show = show,
                 calibrate = calibrate, **kwargs)
 
-    def counts_per_second(self):
+    def counts_per_second(self, elapsed = None, start = 0, end = -1):
         """
         Return average counts per second the exposures that constitute this Frame.
         """
-        return np.sum(self._raw_lineout()) / (self.numExposures / config.frames_per_second)
+        if elapsed is None:
+            elapsed = self.numExposures / config.frames_per_second
+        return np.sum(self._raw_lineout()[start:end]) / elapsed

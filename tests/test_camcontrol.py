@@ -78,3 +78,24 @@ def test_number_exposures():
     assert run.numExposures == 100
     run2 = camcontrol.DataRun('foobar2', htime = '3h')
     assert run2.numExposures == 10800 * int(config.frames_per_second)
+
+def test_acquisition_time():
+    run = camcontrol.DataRun('foobar3', htime = '5s')
+    time.sleep(2)
+    assert run._acquisistion_time() >= 2.
+    time.sleep(4)
+    assert run._acquisistion_time() == 5.
+
+def test_countrate():
+    run = camcontrol.DataRun('foobar3', htime = '5s')
+    def flattime():
+        return 1.
+    frame = camcontrol.Frame(np.ones((1024, 1280)))
+    def flatarr():
+        return frame
+    run.get_frame = flatarr
+    run._acquisistion_time = flattime
+    i1 =  run.counts_per_second(start = 10, end = 20)
+    i2 =  run.counts_per_second(start = 10, end = 30)
+    assert np.isclose(i2/i1, 2.)
+    
