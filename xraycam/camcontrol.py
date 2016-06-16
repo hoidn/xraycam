@@ -161,7 +161,7 @@ def _get_poisson_uncertainties(intensities):
     """
     return np.sqrt(np.array(intensities))
 
-def _plot_lineout(pixeli, intensity, show = False, label = '', error_bars = True):
+def _plot_lineout(pixeli, intensity, show = False, label = '', error_bars = False):
     if error_bars:
         if not (config.plotting_mode == 'notebook'):
             raise NotImplementedError("Error bars not supported in matplotlib mode")
@@ -477,7 +477,7 @@ class Frame:
 
         return compose(apply_rebin, apply_smooth)(self._raw_lineout())
 
-    def plot_lineout(self, smooth = 0, error_bars = True, rebin = 1, label = '',
+    def plot_lineout(self, smooth = 0, error_bars = False, rebin = 1, label = '',
             show = True):
         if label is None:
             label = self.name
