@@ -1,3 +1,7 @@
 [submodule "xraycam/utils"]
 	path = xraycam/utils
 	url = https://github.com/hoidn/utils
+[submodule "xraycam/legacy"]
+	path = xraycam/legacy
+	url = https://github.com/hoidn/xraycam
+	branch = legacy
