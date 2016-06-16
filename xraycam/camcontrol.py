@@ -443,7 +443,7 @@ class Frame:
         
     def filter(self, threshold_min = 10, threshold_max = 150):
         """
-        Returns a new Frame with artifacts filtered out.
+        Returns a new Frame with pixels outside the specified range filtered out.
         """
         new = copy.deepcopy(self)
         data = new.data
@@ -453,6 +453,17 @@ class Frame:
         pixel_outliers = (data < threshold_min) | (data > threshold_max)
         data[row_outliers[:, np.newaxis] | pixel_outliers] = 0.
         return new
+
+    def remove_hot(self, threshold = 0):
+        """
+        Returns a new Frame with hot pixels removed.
+        """
+        from . import camalysis
+        new = copy.deepcopy(self)
+        hot_indices = camalysis.get_hot_pixels(threshold = threshold)
+        new.data[hot_indices] = 0
+        return new
+        
 
     def _raw_lineout(self):
         return np.sum(self.data, axis = 0) / self.photon_value

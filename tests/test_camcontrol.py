@@ -77,14 +77,14 @@ def test_number_exposures():
     run = camcontrol.DataRun('foobar', numExposures = 100)
     assert run.numExposures == 100
     run2 = camcontrol.DataRun('foobar2', htime = '3h')
-    assert run2.numExposures == 10800 * int(config.frames_per_second)
+    assert run2.numExposures == 10800 * config.frames_per_second
 
 def test_acquisition_time():
     run = camcontrol.DataRun('foobar3', htime = '5s')
     time.sleep(2)
     assert run._acquisistion_time() >= 2.
     time.sleep(4)
-    assert run._acquisistion_time() == 5.
+    assert 6 > run._acquisistion_time() >= 5.
 
 def test_countrate():
     run = camcontrol.DataRun('foobar3', htime = '5s')
@@ -99,3 +99,11 @@ def test_countrate():
     i2 =  run.counts_per_second(start = 10, end = 30)
     assert np.isclose(i2/i1, 2.)
     
+def test_frame_remove_hot():
+    dark4=camcontrol.DataRun('data/6.16.dark4', gain = '0x3f',
+        htime = '10m', run = False, window_min = 30, window_max = 65, photon_value=50.)
+    frame = dark4.get_frame()
+    assert np.all(np.isclose(0, frame.remove_hot().data))
+    frame.data[500, 500] = 10
+    assert not np.all(np.isclose(0, frame.remove_hot().data))
+
