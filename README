@@ -1,8 +1,13 @@
-Current address of shared notebook server on campus LAN: http://10.155.95.216:8888
+Address of Oliver's notebook server on campus LAN: http://10.155.94.65:8888
 Address of Will's notebook server on campus LAN: http://10.155.95.94:8888
 
-To update, run:
+Installation:
+
+1. Initialize submodules (first time only):
+git submodule init
+
+2. Update submodules:
 git pull --recurse-submodules  && git submodule update --recursive
 
-followed by:
+3. Install the package:
 python setup.py install --user
