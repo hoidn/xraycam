@@ -161,7 +161,10 @@ def _get_poisson_uncertainties(intensities):
     """
     return np.sqrt(np.array(intensities))
 
-def _plot_lineout(pixeli, intensity, show = False, label = '', error_bars = False):
+def _plot_lineout(pixeli, intensity, show = False, label = '', error_bars = False,
+        peaknormalize = False):
+    if peaknormalize and (np.max(intensity) > 0.):
+        intensity = intensity / np.max(intensity)
     if error_bars:
         if not (config.plotting_mode == 'notebook'):
             raise NotImplementedError("Error bars not supported in matplotlib mode")
@@ -468,7 +471,7 @@ class Frame:
     def _raw_lineout(self):
         return np.sum(self.data, axis = 0) / self.photon_value
 
-    def get_lineout(self, rebin = 1, smooth = 0):
+    def get_lineout(self, rebin = 1, smooth = 0, xmin = 0, xmax = -1):
         """
         Return a smoothed and rebinned lineout of self.data.
 
@@ -486,14 +489,15 @@ class Frame:
         if (not isinstance(rebin, int)) or rebin < 1:
             raise ValueError("Rebin must be a positive integer")
 
-        return compose(apply_rebin, apply_smooth)(self._raw_lineout())
+        return compose(apply_rebin, apply_smooth)(self._raw_lineout()[xmin: xmax])
 
     def plot_lineout(self, smooth = 0, error_bars = False, rebin = 1, label = '',
-            show = True):
+            show = True, peaknormalize = False, xmin = 0, xmax = -1):
         if label is None:
             label = self.name
-        return _plot_lineout(*self.get_lineout(rebin = rebin, smooth = smooth),
-            show = show, error_bars = error_bars, label = label)
+        return _plot_lineout(*self.get_lineout(rebin = rebin, smooth = smooth,
+                xmin = xmin, xmax = xmax),
+            show = show, error_bars = error_bars, label = label, peaknormalize = peaknormalize)
 
     def plot_histogram(self, show = True, calibrate = False, **kwargs):
         """
