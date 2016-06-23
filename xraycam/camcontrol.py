@@ -163,22 +163,25 @@ def _get_poisson_uncertainties(intensities):
 
 def _plot_lineout(pixeli, intensity, show = False, label = '', error_bars = False,
         peaknormalize = False):
-    if peaknormalize and (np.max(intensity) > 0.):
-        intensity = intensity / np.max(intensity)
+    if peaknormalize:
+        norm = np.max(intensity)
+    else:
+        norm = 1.
     if error_bars:
         if not (config.plotting_mode == 'notebook'):
             raise NotImplementedError("Error bars not supported in matplotlib mode")
+        bars = _get_poisson_uncertainties(intensity) / norm
         error_y = dict(
             type = 'data',
-            array = _get_poisson_uncertainties(intensity),
+            array = bars,
             visible = True
         )
-        plt.plot(pixeli, intensity, label = label, error_y = error_y)
+        plt.plot(pixeli, intensity/norm, label = label, error_y = error_y)
     else:
-        plt.plot(pixeli, intensity, label = label)
+        plt.plot(pixeli, intensity/norm, label = label)
     if show:
         plt.show()
-    return intensity
+    return intensity/norm
 
 def _plot_histogram(values, show = True,
         calibrate = False, label = '', **kwargs):
@@ -457,16 +460,17 @@ class Frame:
         data[row_outliers[:, np.newaxis] | pixel_outliers] = 0.
         return new
 
-    def remove_hot(self, threshold = 0):
+    def remove_hot(self, darkrun = None, threshold = 0):
         """
+        darkrun : DataRun
+            A dark run to use as the hot pixel mask
         Returns a new Frame with hot pixels removed.
         """
         from . import camalysis
         new = copy.deepcopy(self)
-        hot_indices = camalysis.get_hot_pixels(threshold = threshold)
+        hot_indices = camalysis.get_hot_pixels(darkrun = darkrun, threshold = threshold)
         new.data[hot_indices] = 0
         return new
-        
 
     def _raw_lineout(self):
         return np.sum(self.data, axis = 0) / self.photon_value
@@ -493,7 +497,7 @@ class Frame:
 
     def plot_lineout(self, smooth = 0, error_bars = False, rebin = 1, label = '',
             show = True, peaknormalize = False, xmin = 0, xmax = -1):
-        if label is None:
+        if not label:
             label = self.name
         return _plot_lineout(*self.get_lineout(rebin = rebin, smooth = smooth,
                 xmin = xmin, xmax = xmax),

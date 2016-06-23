@@ -48,3 +48,32 @@ def lineout_subregion(frame, cutoff, rebin = 4, error_bars = True, **kwargs):
     nframe = copy.deepcopy(frame)
     nframe.data = nframe.data[len(frame.data) - cutoff:, :]
     return nframe.plot_lineout(rebin = rebin, error_bars = error_bars)
+
+def plot_width_progression(dataruns, bragg_degrees, energy, deltatheta = 5.2e-4/10,
+        xmin = 0, xmax = 1000, smooth = 5, rebin = 1):
+    """
+    dataruns : list of DataRun instances
+    bragg_degrees : float
+        Bragg angle in degrees.
+    energy : float
+        Photon energy in eV.
+    deltatheta : float
+        Angular size of a pixel.
+    xmax : int
+        Upper index at which to truncate the lineout.
+    xmin : int
+        Lower index at which to truncate the lineout.
+    """
+    bragg = np.deg2rad(bragg_degrees)
+    deltaE = energy * deltatheta * np.cos(bragg)/np.sin(bragg)
+    from xraycam.camalysis import fwhm
+    lineouts = [dr.get_frame().get_lineout(smooth = 3, xmin = xmin, xmax = xmax)[1] for dr in dataruns]
+    fwhmlist = list(map(lambda l: "FWHM: {:.4f} eV".format(deltaE * fwhm(l)), lineouts))
+
+    salpha_width_study_lineouts =\
+        [dr.plot_lineout(peaknormalize = True, xmin = xmin,
+            xmax = xmax, smooth = smooth, rebin = rebin, show = False, label = l)
+        for dr, l
+        in zip(dataruns, fwhmlist)]
+    plt.show()
+    return salpha_width_study_lineouts
