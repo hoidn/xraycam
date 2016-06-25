@@ -10,6 +10,8 @@ import copy
 import pdb
 import subprocess, pipes
 import operator
+#import _thread
+import logging
 
 from functools import reduce
 
@@ -21,11 +23,25 @@ if config.plotting_mode == 'notebook':
 else:
     import matplotlib.pyplot as plt
 
+logging.basicConfig(filename='xraycam.log', level=logging.DEBUG)
+
 # TODO: set up keypair authentication at first usage of the package, if necessary,
 # or else simply switch to using password authentication throughout. 
 # TODO: add tests that enforce the right update behavior.
 
 PKG_NAME = __name__.split('.')[0]
+
+#def threaded(func):
+#    """
+#    Threading decorator.
+#    """
+#    def newfunc(*args, **kwargs):
+#        _thread.start_new_thread(func, args, kwargs)
+#    return newfunc
+
+#@threaded
+#def read_threaded(sshout):
+#    logging.info(sshout.read())
 
 # from https://gist.github.com/rossdylan/3287138
 # TODO: how about this?:
@@ -240,14 +256,17 @@ class DataRun:
         else:
             self.numExposures = self.time_to_numexposures(htime)
 
+        # TODO: tidy this up
         if run:
             if os.path.exists(self.arrayname):
                 raise ValueError("Data file: %s already exists. Please choose a different run prefix." % self.arrayname)
-            exposure_cmd = 'time sudo ./main_mt9m001 %d -o ' % threshold + run_prefix\
-                + ' -n ' + str(self.numExposures) + ' -g ' + gain +\
-                ' -w %d -r %d %d' % (update_interval, window_min, window_max)
+            exposure_cmd = "screen -d -m bash -c 'time sudo ./main_mt9m001 %d -o " % threshold + run_prefix\
+                + " -n " + str(self.numExposures) + " -g " + gain +\
+                " -w %d -r %d %d" % (update_interval, window_min, window_max)
             if filter_sum:
-                exposure_cmd += ' -p'
+                exposure_cmd += " -p"
+            exposure_cmd += " >> xraycam.log '"
+            print(exposure_cmd)
 
             ssh = SSHClient()
             ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -257,11 +276,11 @@ class DataRun:
             (sshin2, sshout2, ssherr2) = ssh.exec_command('cd' + ' ' + detconfig.base_path\
                 + '; ' + exposure_cmd)
             if block:
-                print(sshout2.read())
-                print(ssherr2.read())
-            elif run:
+                time.sleep(float(numExposures) / config.frames_per_second + 3)
+            else:
                 time.sleep(float(update_interval) / config.frames_per_second + 3)
             ssh.close()
+        
 
         if block:
             self._set_complete_state(True)
@@ -269,6 +288,7 @@ class DataRun:
             self._set_complete_state(False)
 
         self._frame = None
+
 
     def _acquisistion_time(self):
         default = float(self.numExposures) / config.frames_per_second

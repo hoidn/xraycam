@@ -7,3 +7,5 @@ def test_fwhm():
     x = np.arange(1000)
     spec = make_norm_dist(x, 500, 50)
     assert np.isclose(fwhm(spec), 2*np.sqrt(2*np.log(2)) * 50)
+
+#def test_get_hot_pixels(dark
