@@ -28,18 +28,3 @@ def fwhm(arr1d):
     r1, r2 = spline.roots()
     return r2 - r1
 
-def _plot_histogram(values, show = True,
-        calibrate = False, label = '', **kwargs):
-#    if x is None:
-#        x = np.array(list(range(len(values))))
-    if calibrate:
-        plt.xlabel('Energy (eV)')
-        values = adc_to_eV(values)
-        #x = adc_to_eV(x)
-        #plt.plot(x, values, label = label, **kwargs)
-    else:
-        plt.xlabel('ADC value')
-    # TODO: make mpl_plotly interpret the kwarg `bins` (instead of `nbinsx`)
-    plt.hist(values, label = label, **kwargs)
-    if show:
-        plt.show()

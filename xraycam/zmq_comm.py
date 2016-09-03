@@ -45,12 +45,10 @@ def launch_worker(f, flags = 0, copy = True, track = False):
     # Socket to receive messages on
     receiver = context.socket(zmq.PULL)
     receiver.connect(ventilator_addr)
-    receiver.setsockopt(zmq.CONFLATE, 1)
 
     # Socket to send messages to
     sender = context.socket(zmq.PUSH)
     sender.connect(sink_addr)
-    sender.setsockopt(zmq.CONFLATE, 1)
     #print("Worker waiting for data...")
     try:
         while True:
@@ -82,7 +80,6 @@ def start_sink_routine(f, flags = 0, copy = True, track = False):
     # Socket to receive messages on
     receiver = context.socket(zmq.PULL)
     receiver.bind(sink_addr)
-    receiver.setsockopt(zmq.CONFLATE, 1)
 
     # Socket to send messages to
     publisher = context.socket(zmq.PUB)

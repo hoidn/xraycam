@@ -7,7 +7,6 @@ import subprocess, pipes
 
 from . import config
 from . import utils
-from .camalysis import _plot_histogram
 import detconfig
 
 def exists_remote(host, path):
@@ -140,7 +139,7 @@ class DataRun:
         self._frame = None
 
 
-    def acquisistion_time(self):
+    def acquisition_time(self):
         default = float(self.numExposures) / config.frames_per_second
         if self.run == False:
             return default
@@ -191,3 +190,12 @@ class DataRun:
         singles = plot_one(self.prefix + 'singles.dat')
         return pixels, singles
 
+    @staticmethod
+    def time_to_numexposures(timestring):
+        """
+        Convert a human-readable time string (e.g. '3m', '1h', etc.) to a number of exposures.
+        """
+        import humanfriendly
+        def roundup(x):
+            return int(np.ceil(x / 10.0)) * 10
+        return roundup(config.frames_per_second * humanfriendly.parse_timespan(timestring))

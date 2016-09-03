@@ -6,19 +6,19 @@ import pdb
 import operator
 #import _thread
 import logging
+import os
 
 from functools import reduce
 
 from . import utils
 from . import config
-from .camalysis import _plot_histogram
 
 
 # TODO: move this setting from config.py to detconfig.py
 if config.plotting_mode == 'notebook':
     from xraycam.mpl_plotly import plt
-    import sys
-    sys.stdout = open(config.logfile_path, 'w')
+    #import sys
+    #sys.stdout = open(config.logfile_path, 'w')
 else:
     import matplotlib.pyplot as plt
 
@@ -28,8 +28,6 @@ logging.basicConfig(filename='xraycam.log', level=logging.DEBUG)
 # or else simply switch to using password authentication throughout. 
 
 PKG_NAME = __name__.split('.')[0]
-
-
 
 # from https://gist.github.com/rossdylan/3287138
 # TODO: how about this?:
@@ -144,72 +142,106 @@ def _plot_lineout(pixeli, intensity, show = False, label = '', error_bars = Fals
         plt.show()
     return intensity/norm
 
-def make_DataRun(base):
-    """
-    Factory function for creating the DataRun class with dynamic inheritance.
-    """
-    class _DataRun(base):
-        def __init__(self, *args, **kwargs):
-            parent = super(_DataRun, self)
-            parent.__init__(*args, **kwargs)
-            # self.__doc__ = parent.__doc__
-
-        def get_frame(self):
-            # TODO: do we need this attribute?
-            time = self.acquisistion_time()
-            self._frame = Frame(array = self.get_array(), name = self.name,
-                photon_value = self.photon_value, time = time)
-            return self._frame
-
-        @staticmethod
-        def time_to_numexposures(timestring):
-            """
-            Convert a human-readable time string (e.g. '3m', '1h', etc.) to a number of exposures.
-            """
-            import humanfriendly
-            def roundup(x):
-                return int(np.ceil(x / 10.0)) * 10
-            return roundup(config.frames_per_second * humanfriendly.parse_timespan(timestring))
-
-        def plot_histogram(self, cluster_rejection = True, show = True,
-                calibrate = True, **kwargs):
-            """
-            Plot histogram output from the camera acquisition.
-            """
-            pixels, singles = self.get_histograms()
-            if cluster_rejection:
-                values = singles
-            else:
-                values = pixels
-            _plot_histogram(values, show = show, calibrate = calibrate, **kwargs)
-
-        def plot_lineout(self, **kwargs):
-            """
-            kwargs are passed to self.frame.filter.
-            """
-            return self.get_frame().plot_lineout(**kwargs)
-
-        def show(self, **kwargs):
-            self.get_frame().show(**kwargs)
-
-        def counts_per_second(self, **kwargs):
-            return self.get_frame().counts_per_second(elapsed = self.acquisistion_time(), **kwargs)
-
-    return _DataRun
-
-# TODO: better alternative to this hack?
-loc = locals()
-def set_detector(detid):
-    if detid == 'beaglebone':
-        from .bbb import DataRun as base
-    elif detid == 'zwo':
-        from .zwo import DataRun as base
+def _plot_histogram(values, show = True, xmin = None, xmax = None,
+        calibrate = False, label = '', **kwargs):
+#    if x is None:
+#        x = np.array(list(range(len(values))))
+    if calibrate:
+        plt.xlabel('Energy (eV)')
+        values = adc_to_eV(values)
+        #x = adc_to_eV(x)
+        #plt.plot(x, values, label = label, **kwargs)
     else:
-        raise ValueError("detconfig.detector: must equal 'beaglebone' or 'zwo'")
-    dr = make_DataRun(base)
-    loc['DataRun'] = dr
-    return dr
-DataRun = set_detector(detconfig.detector)
+        plt.xlabel('ADC value')
+    if xmin is not None:
+        values[values < xmin] = 0
+    if xmax is not None:
+        values[values > xmax] = 0
+    # TODO: make mpl_plotly interpret the kwarg `bins` (instead of `nbinsx`)
+    plt.hist(values, label = label, **kwargs)
+    if show:
+        plt.show()
+
+class DataRun:
+    def __init__(self, run_prefix = '', rotate = False, photon_value = 45., *args, **kwargs):
+        self.rotate = rotate
+        self.photon_value = photon_value
+        if detconfig.detector == 'zwo':
+            from . import zwo
+            self.base = zwo.ZRun(run_prefix = run_prefix, *args, **kwargs)
+            #self.stop = base.stop
+        elif detconfig.detector == 'beaglebone':
+            from . import bbb
+            self.base = bbb.DataRun(run_prefix = run_prefix, *args, **kwargs)
+            self.check_complete = self.base.check_complete
+        else:
+            raise ValueError
+        self.name = run_prefix
+
+
+    def acquisition_time(self):
+        return self.base.acquisition_time()
+    def get_array(self):
+        return self.base.get_array()
+    def get_histograms(self):
+        return self.base.get_histograms()
+    def stop(self):
+        """
+        Stop the acquisition.
+        """
+        self.base.stop()
+
+    def get_frame(self):
+        # TODO: do we need this attribute?
+        time = self.acquisition_time()
+        self._frame = Frame(array = self.get_array(), name = self.name,
+            photon_value = self.photon_value, time = time)
+        return self._frame
+
+    @staticmethod
+    def time_to_numexposures(timestring):
+        """
+        Convert a human-readable time string (e.g. '3m', '1h', etc.) to a number of exposures.
+        """
+        import humanfriendly
+        def roundup(x):
+            return int(np.ceil(x / 10.0)) * 10
+        return roundup(config.frames_per_second * humanfriendly.parse_timespan(timestring))
+
+    def plot_histogram(self, cluster_rejection = True, show = True,
+            calibrate = True, **kwargs):
+        """
+        Plot histogram output from the camera acquisition.
+        """
+        pixels, singles = self.get_histograms()
+        if cluster_rejection:
+            values = singles
+        else:
+            values = pixels
+        _plot_histogram(values, show = show, calibrate = calibrate, **kwargs)
+
+    def plot_lineout(self, **kwargs):
+        """
+        kwargs are passed to self.frame.filter.
+        """
+        return self.get_frame().plot_lineout(**kwargs)
+
+    def show(self, **kwargs):
+        self.get_frame().show(**kwargs)
+
+    def counts_per_second(self, **kwargs):
+        return self.get_frame().counts_per_second(elapsed = self.acquisition_time(), **kwargs)
+
+
+#loc = locals()
+def set_detector(detid):
+    if detid == 'beaglebone' or detid == 'zwo':
+        detconfig.detector = detid
+        if detid == 'zwo':
+            # Module import causes oaCapture to launch
+            from . import zwo
+    else:
+        raise ValueError("detector identifier: must be 'beaglebone' or 'zwo'")
 
 class RunSet:
     """
@@ -267,15 +299,19 @@ class RunSet:
         def make_frame(dr):
             old_frame = dr.get_frame()
             return Frame(old_frame.get_data(), name = self.name,
-                numExposures = old_frame.numExposures)
+                numExposures = old_frame.numExposures, rotate = self.rotate)
         frames = list(map(make_frame, self.dataruns))
         def framefilter(frame):
             return frame.filter(**kwargs)
         return reduce(operator.add, list(map(framefilter, frames)))
 
 class Frame:
-    def __init__(self, array = None, time = 0., name = '', photon_value = 45.):
-        self.data = array
+    def __init__(self, array = None, time = 0., name = '', photon_value = 45.,
+            rotate = False):
+        if rotate:
+            self.data = array
+        else:
+            self.data = np.rot90(array)
         self.time = time
         self.name = name
         self.photon_value = photon_value
