@@ -1,6 +1,5 @@
-Address of Oliver's notebook server on campus LAN: http://10.155.94.65:8888
-Address of Will's notebook server on campus LAN: http://10.155.95.94:8888
-NEW Address of beaglebone on local network:  http://10.155.95.216
+UW notebook server addresses: http://10.155.94.65:8888, http://10.155.94.252:8888
+Beaglebone Black IP: 10.155.95.216
 
 Installation:
 
