@@ -162,6 +162,7 @@ def _plot_histogram(values, show = True, xmin = None, xmax = None,
     if show:
         plt.show()
 
+# TODO: reimplement inheritance
 class DataRun:
     def __init__(self, run_prefix = '', rotate = False, photon_value = 45., *args, **kwargs):
         self.rotate = rotate

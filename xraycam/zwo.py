@@ -4,8 +4,10 @@ import numpy as np
 from ctypes import c_int
 import numpy.ctypeslib as npct
 import dill
+import humanfriendly
 
 from multiprocess import Process
+from threading import Thread
 import os
 
 from . import zmq_comm
@@ -88,9 +90,10 @@ class ZRun:
     TODO.
     """
     def __init__(self, run_prefix = '',  window_min = 0,
-            window_max = 255, threshold = 10, decluster = True, htime = '10s'):
+            window_max = 255, threshold = 10, decluster = True, htime = None):
             self.name = run_prefix
             self.attrs = ['_time_start', 'initial_array', '_total_time', '_final_array']
+            # Tru to load run from file cache
             try:
                 attrs = self.attrs
                 keys = [run_prefix + a for a in attrs]
@@ -98,6 +101,7 @@ class ZRun:
                 for a, v in zip(attrs, values):
                     self.__dict__[a] = v
                 print ("Loaded from cache.")
+            # Do an actual data collection
             except FileNotFoundError:
                 self._time_start = time.time()
                 self.initial_array = self.get_array()
@@ -118,6 +122,17 @@ class ZRun:
                 while new_workers:
                     workers.append(new_workers.pop())
                 loc['worker'] = launch_process(worker_function)
+
+                if htime is not None:
+                    def timeit():
+                        print( "starting acquisition")
+                        time.sleep(humanfriendly.parse_timespan(htime))
+                        self.stop()
+                        print("stopped acquisistion")
+                    t_thread = Thread(target = timeit, args = ())
+                    t_thread.start()
+
+
 
     def stop(self):
         """
