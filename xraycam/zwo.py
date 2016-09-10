@@ -1,10 +1,4 @@
-import zmq
-import time
-import numpy as np
-from ctypes import c_int
-import numpy.ctypeslib as npct
-import dill
-import humanfriendly
+jk
 
 from multiprocess import Process
 from threading import Thread
@@ -85,6 +79,13 @@ def sink_function(current, arr):
 def sink_process():
     zmq_comm.start_sink_routine(sink_function)
 
+def init_workers():
+    """
+    Start a dummy worker process that keeps up with frames from the ventilator.
+    """
+    loc = locals()
+    workers = [launch_process(make_worker_function(0, decluster = False)) for n in range(NCORES)]
+
 class ZRun:
     """
     TODO.
@@ -93,7 +94,7 @@ class ZRun:
             window_max = 255, threshold = 10, decluster = True, htime = None):
             self.name = run_prefix
             self.attrs = ['_time_start', 'initial_array', '_total_time', '_final_array']
-            # Tru to load run from file cache
+            # TODO: entire dict in one file
             try:
                 attrs = self.attrs
                 keys = [run_prefix + a for a in attrs]
@@ -108,20 +109,26 @@ class ZRun:
 
                 worker_function = make_worker_function(threshold, window_min = window_min,
                     window_max = window_max, decluster = decluster)
-                # Kill the old worker and launch a new one
 
-                # Terminate and replace the current worker processes
-                new_workers = []
-                def replace_worker():
-                    new_workers.append(launch_process(worker_function))
-                    old = workers.pop()
-                    old.terminate()
-                    
-                while workers:
-                    replace_worker()
-                while new_workers:
-                    workers.append(new_workers.pop())
-                loc['worker'] = launch_process(worker_function)
+                # Kill the old workers and launch new ones
+                self.replace_workers(worker_function)
+
+    def replace_workers(self, worker_function):
+        """
+        Replace all current workers by processes running worker_function.
+        """
+        # Terminate and replace the current worker processes
+        new_workers = []
+        def replace_worker():
+            new_workers.append(launch_process(worker_function))
+            old = workers.pop()
+            old.terminate()
+            
+        while workers:
+            replace_worker()
+        while new_workers:
+            workers.append(new_workers.pop())
+        #loc['worker'] = launch_process(worker_function)
 
                 if htime is not None:
                     def timeit():
@@ -144,6 +151,8 @@ class ZRun:
         keys = [self.name + a for a in self.attrs]
         for k, a in zip(keys, self.attrs):
             cache_put(self.__dict__[a], key = k)
+
+        self.replace_workers(dummy_worker)
 
     def acquisition_time(self):
         elapsed = time.time() - self._time_start 
@@ -175,7 +184,8 @@ class ZRun:
 
 # initial worker
 loc = locals()
-workers = [launch_process(make_worker_function(0, decluster = False)) for n in range(NCORES)]
+dummy_worker = make_worker_function(0, decluster = False)
+workers = [launch_process(dummy_worker) for n in range(NCORES)]
 
 time.sleep(0.2)
 launch_process(sink_process)
