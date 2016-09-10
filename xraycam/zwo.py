@@ -1,4 +1,10 @@
-jk
+import zmq
+import time
+import numpy as np
+from ctypes import c_int
+import numpy.ctypeslib as npct
+import dill
+import humanfriendly
 
 from multiprocess import Process
 from threading import Thread
@@ -67,7 +73,6 @@ def launch_process(f):
 
 def sink_function(current, arr):
     #arr = np.frombuffer(msg, dtype = 'uint8').reshape(10, 10)
-    import time
     #time.sleep(0.1)
     if current is None:
         print ('hello world')
@@ -113,6 +118,15 @@ class ZRun:
                 # Kill the old workers and launch new ones
                 self.replace_workers(worker_function)
 
+                if htime is not None:
+                    def timeit():
+                        print( "starting acquisition")
+                        time.sleep(humanfriendly.parse_timespan(htime))
+                        self.stop()
+                        print("stopped acquisistion")
+                    t_thread = Thread(target = timeit, args = ())
+                    t_thread.start()
+
     def replace_workers(self, worker_function):
         """
         Replace all current workers by processes running worker_function.
@@ -129,16 +143,6 @@ class ZRun:
         while new_workers:
             workers.append(new_workers.pop())
         #loc['worker'] = launch_process(worker_function)
-
-                if htime is not None:
-                    def timeit():
-                        print( "starting acquisition")
-                        time.sleep(humanfriendly.parse_timespan(htime))
-                        self.stop()
-                        print("stopped acquisistion")
-                    t_thread = Thread(target = timeit, args = ())
-                    t_thread.start()
-
 
 
     def stop(self):
