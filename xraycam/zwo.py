@@ -117,7 +117,7 @@ def sink_function(current, arr):
         #return np.zeros((10, 10), dtype = 'uint32')
         return arr.astype('uint32')
     else:
-        print ('shape: ', current.shape, 'sum: ', np.sum(current))
+        #print ('shape: ', current.shape, 'sum: ', np.sum(current))
         return current + arr
 def sink_process():
     zmq_comm.start_sink_routine(sink_function)

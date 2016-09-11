@@ -12,7 +12,7 @@ setup(name = 'xraycam',
 #    scripts = [
 #        'bin/oacapture'
 #        ],
-    install_requires = ['paramiko', 'numpy', 'matplotlib', 'mpld3', 'plotly', 'humanfriendly', 'multiprocess'],
+    install_requires = ['paramiko', 'numpy', 'matplotlib', 'pyzmq', 'plotly', 'humanfriendly', 'multiprocess'],
     zip_safe = False)
 
 # TODO: the below config isn't getting loaded (instead python grabs the package version). Fix this.

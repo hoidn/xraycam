@@ -44,7 +44,7 @@ def launch_worker(f, flags = 0, copy = True, track = False):
     Incoming message data must be in the following format: uint16
     (height), uint16 (width), uint8 array[].
     """
-    print("Worker LAUNCHING")
+    #print("Worker LAUNCHING")
     nframe = 0
     import struct
     context = zmq.Context()
@@ -67,10 +67,12 @@ def launch_worker(f, flags = 0, copy = True, track = False):
     #print("Worker waiting for data...")
 
     def _exit():
+        # Shutdown
         receiver.close()
         sender.close()
         controller.close()
         context.term()
+        # Time to commit suicide
         os.kill(os.getpid(), signal.SIGTERM)
     try:
         while True:
@@ -89,7 +91,7 @@ def launch_worker(f, flags = 0, copy = True, track = False):
             if controller in socks and socks[controller] == zmq.POLLIN:
                 msg = controller.recv()
                 if msg == b'KILL':
-                    print("Worker received KILL signal")
+                    #print("Worker received KILL signal")
                     _exit()
 
     except KeyboardInterrupt:
