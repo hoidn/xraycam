@@ -60,7 +60,7 @@ Cluster* searchClust(uint16_t *frame, Cluster *cluster, uint8_t *explored, int n
 
         //update cluster size and value
         cluster -> size += 1;
-        cluster -> value += (int) frame[i * m  + j];
+        cluster -> value += (uint32_t) frame[i * m  + j];
         cluster -> weightedx += i * frame[i * m + j];
         cluster -> weightedy += j * frame[i * m + j];
 
@@ -125,7 +125,7 @@ Cluster* searchClust_8(uint8_t *frame, Cluster *cluster, uint8_t *explored, int 
 
         //update cluster size and value
         cluster -> size += 1;
-        cluster -> value += (int) frame[i * m  + j];
+        cluster -> value += (uint32_t) frame[i * m  + j];
         cluster -> weightedx += i * frame[i * m + j];
         cluster -> weightedy += j * frame[i * m + j];
 
