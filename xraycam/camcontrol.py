@@ -241,6 +241,7 @@ def set_detector(detid):
         if detid == 'zwo':
             # Module import causes oaCapture to launch
             from . import zwo
+            zwo.init()
     else:
         raise ValueError("detector identifier: must be 'beaglebone' or 'zwo'")
 

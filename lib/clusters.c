@@ -213,7 +213,7 @@ void searchFrame_array(uint16_t *declustered, uint16_t *arr, int n, int m, int t
     }
 }
 
-void searchFrame_array_8(uint8_t *declustered, uint8_t *arr, int n, int m, int threshold) {
+void searchFrame_array_8(uint32_t *declustered, uint8_t *arr, int n, int m, int threshold) {
     InitQueue();
     Cluster cluster; 
     //boolean array that records which pixels have been explored by the BFS. 

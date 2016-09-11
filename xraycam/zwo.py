@@ -15,7 +15,7 @@ from . import utils
 
 PKG_NAME = __name__.split('.')[0]
 
-NCORES = 1
+NCORES = 5
 
 # communication with ZWO camera capture program
 context = zmq.Context()
@@ -41,13 +41,14 @@ def do_decluster(arr2d, threshold, dtype = np.uint8):
     # contiguous?
     # TODO: add support for uint8 arrays in the c module
     arr1d = np.ascontiguousarray(arr2d.ravel(), dtype = np.uint8)
-    declustered = np.zeros_like(arr1d)
+    declustered = np.zeros(np.shape(arr1d), dtype = np.uint32)
     arr_uint = npct.ndpointer(dtype = np.uint8, ndim = 1, flags = 'C_CONTIGUOUS')
+    arr_uint32 = npct.ndpointer(dtype = np.uint32, ndim = 1, flags = 'C_CONTIGUOUS')
     # load the c extension
     libcd = npct.load_library("libclusters", utils.resource_path("../lib/",  PKG_NAME))
 
     libcd.searchFrame_array_8.restype = None
-    libcd.searchFrame_array_8.argtypes = [arr_uint, arr_uint, c_int, c_int, c_int]
+    libcd.searchFrame_array_8.argtypes = [arr_uint32, arr_uint, c_int, c_int, c_int]
 
     dimx, dimy = np.shape(arr2d)
     libcd.searchFrame_array_8(declustered, arr1d, dimx, dimy, threshold)
@@ -55,6 +56,12 @@ def do_decluster(arr2d, threshold, dtype = np.uint8):
 
 def make_worker_function(threshold, window_min = 0, window_max = 255, decluster = True):
     def worker_function(arr):
+        """
+        Input:
+            arr : np.ndarray of type uint8
+
+        Returns np.ndarray of the same type and shape.
+        """
         new = arr.copy() # TODO: zero-copy
         if decluster:
             new = do_decluster(arr, threshold)
@@ -64,6 +71,37 @@ def make_worker_function(threshold, window_min = 0, window_max = 255, decluster 
     def worker_process():
         zmq_comm.launch_worker(worker_function)
     return worker_process
+
+dummy_worker = make_worker_function(0, decluster = False)
+def init_workers(worker = dummy_worker):
+    """
+    Start a dummy worker process that keeps up with frames from the ventilator.
+    """
+    loc['workers'] = [launch_process(worker) for n in range(NCORES)]
+
+def kill_workers():
+    controller = context.socket(zmq.PUB)
+    controller.bind(zmq_comm.controller_addr)
+    # Delay to avoid slow joiner syndrome
+    time.sleep(0.2)
+    print("controller sending KILL signal")
+    controller.send(b'KILL')
+    controller.close()
+
+def replace_workers(worker_function):
+    """
+    Replace all current workers by processes running worker_function.
+    """
+    kill_workers()
+    # Delay to synchronize with kill signal
+    time.sleep(0.05)
+
+    new_workers = []
+    while workers:
+        workers.pop()
+        new_workers.append(launch_process(worker_function))
+    while new_workers:
+        workers.append(new_workers.pop())
 
 def launch_process(f):
     p = Process(target = f, args = ())
@@ -79,17 +117,13 @@ def sink_function(current, arr):
         #return np.zeros((10, 10), dtype = 'uint32')
         return arr.astype('uint32')
     else:
-        #print ('shape: ', current.shape, 'sum: ', np.sum(current))
+        print ('shape: ', current.shape, 'sum: ', np.sum(current))
         return current + arr
 def sink_process():
     zmq_comm.start_sink_routine(sink_function)
 
-def init_workers():
-    """
-    Start a dummy worker process that keeps up with frames from the ventilator.
-    """
-    loc = locals()
-    workers = [launch_process(make_worker_function(0, decluster = False)) for n in range(NCORES)]
+def init_sink():
+    launch_process(sink_process)
 
 class ZRun:
     """
@@ -116,7 +150,7 @@ class ZRun:
                     window_max = window_max, decluster = decluster)
 
                 # Kill the old workers and launch new ones
-                self.replace_workers(worker_function)
+                replace_workers(worker_function)
 
                 if htime is not None:
                     def timeit():
@@ -127,22 +161,6 @@ class ZRun:
                     t_thread = Thread(target = timeit, args = ())
                     t_thread.start()
 
-    def replace_workers(self, worker_function):
-        """
-        Replace all current workers by processes running worker_function.
-        """
-        # Terminate and replace the current worker processes
-        new_workers = []
-        def replace_worker():
-            new_workers.append(launch_process(worker_function))
-            old = workers.pop()
-            old.terminate()
-            
-        while workers:
-            replace_worker()
-        while new_workers:
-            workers.append(new_workers.pop())
-        #loc['worker'] = launch_process(worker_function)
 
 
     def stop(self):
@@ -186,15 +204,20 @@ class ZRun:
     def get_histograms(self):
         raise NotImplementedError()
 
-# initial worker
-loc = locals()
-dummy_worker = make_worker_function(0, decluster = False)
-workers = [launch_process(dummy_worker) for n in range(NCORES)]
-
-time.sleep(0.2)
-launch_process(sink_process)
-
 # Launch OAcapture
 # TODO: This process shouldn't persist when the parent dies.
-# set daemon attribute to True so that child processes die with the parent
-os.system('oacapture &> /dev/null &')
+def init_ventilator():
+    os.system('oacapture &> /dev/null &')
+
+def init():
+    """
+    Initialize all processes.
+    """
+    init_workers()
+    init_sink()
+    init_ventilator()
+
+# For modifying module-level variables inside functions
+loc = locals()
+workers = []
+
