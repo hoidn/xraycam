@@ -125,7 +125,7 @@ Cluster* searchClust_8(uint8_t *frame, Cluster *cluster, uint8_t *explored, int 
 
         //update cluster size and value
         cluster -> size += 1;
-        cluster -> value += (uint32_t) frame[i * m  + j];
+        cluster -> value += frame[i * m  + j];
         cluster -> weightedx += i * frame[i * m + j];
         cluster -> weightedy += j * frame[i * m + j];
 
@@ -223,7 +223,8 @@ void searchFrame_array_8(uint32_t *declustered, uint8_t *arr, int n, int m, int 
         for (int j = 1; j < m - 1; j ++) {
             if (explored[i * m + j] == 0 && arr[i * m + j] > (uint8_t) threshold) {
                 searchClust_8(arr, &cluster, &explored[0], n, m, i, j, threshold); 
-                declustered[(cluster.weightedx * m + cluster.weightedy)/cluster.value] = cluster.value;
+                declustered[(cluster.weightedx * m / cluster.value)+
+                    (cluster.weightedy/cluster.value)] = cluster.value;
             }
         }
     }

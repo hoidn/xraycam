@@ -46,15 +46,14 @@ def test_decluster_cm():
     assert arr2[1, 1] == 50
     return arr, arr2
 
-# TODO: debug
 def test_decluster_5():
-    dimx, dimy = 108, 1920
+    dimx, dimy = 1079, 1919
     arr = np.ones((dimx, dimy), dtype = np.uint8)
     #arr = np.ones((1080, 1920), dtype = np.uint8)
     arr = decluster(arr, 0)
     
     assert np.sum(arr) == (dimx * dimy)
-    #assert arr[2, 2] == 0
+    assert arr[(dimx - 1)/2, (dimy - 1)/2] == dimx * dimy
 
     return arr 
 

@@ -14,12 +14,12 @@ typedef struct {
 
 //struct to represent a single cluster
 typedef struct{
-    uint32_t size; //number of pixels in cluster
-    uint32_t value;//total signal in cluster
+    uint64_t size; //number of pixels in cluster
+    uint64_t value;//total signal in cluster
     // sum of x coordinates of constituent pixels weighted by their values
-    uint32_t weightedx; 
+    uint64_t weightedx; 
     // sum of y coordinates of constituent pixels weighted by their values
-    uint32_t weightedy;
+    uint64_t weightedy;
 
 } Cluster;
 
