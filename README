@@ -1,7 +1,7 @@
 UW notebook server addresses: http://10.155.94.65:8888, http://10.155.94.252:8888
 Beaglebone Black IP: 10.155.95.216
 
-Installation:
+xraycam installation:
 
 1. Initialize submodules (first time only):
 git submodule init
@@ -11,3 +11,8 @@ git pull --recurse-submodules  && git submodule update --recursive
 
 3. Install the package:
 python setup.py install --user
+
+(modified) oaCapture installation:
+
+1. cd oacapture
+2. sudo ./install.sh
