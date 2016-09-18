@@ -333,7 +333,7 @@ class RunSet:
         def make_frame(dr):
             old_frame = dr.get_frame()
             return Frame(old_frame.get_data(), name = self.name,
-                numExposures = old_frame.numExposures, rotate = self.rotate)
+                time = old_frame.time, rotate = self.rotate)
         frames = list(map(make_frame, self.dataruns))
         def framefilter(frame):
             return frame.filter(**kwargs)
