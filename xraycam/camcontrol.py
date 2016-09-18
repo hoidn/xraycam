@@ -264,7 +264,7 @@ class RunSequence:
             prefixes = [str(time.time()) for _ in range(number_runs)]
         else:
             prefixes = [prefix + '_%d' % i for i in range(number_runs)]
-        self.funcalls = [lambda: DataRun(run_prefix = prefix, htime = htime, **kwargs)
+        self.funcalls = [lambda prefix=prefix: DataRun(run_prefix = prefix, htime = htime, **kwargs)
             for prefix in prefixes]
 
 
@@ -284,6 +284,8 @@ class RunSequence:
             if cur_time != prev_time:
                 prev_time = cur_time
                 time.sleep(1)
+            else:
+                break
         return run
 
 
@@ -295,7 +297,8 @@ class RunSet:
         """
         TODO docstring
         """
-        self.dataruns = RunSequence(*args, **kwargs)
+        from xraycam import async
+        self.dataruns = async.IterThread(RunSequence(*args, **kwargs))
 
     def insert(self,  datarun = None, *args, **kwargs):
         """

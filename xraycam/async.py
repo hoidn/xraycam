@@ -31,3 +31,5 @@ class IterThread:
             self.results.append(self.q.get())
         return iter(list(self.results))
 
+    def __getitem__(self, key):
+        return list(self.__iter__()).__getitem__(key)
