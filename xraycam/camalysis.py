@@ -110,3 +110,26 @@ def fwhm_datarun(datarun,known_energy,yrange=[0,-1],xrange=[0,-1],rebin=1,fwhm_s
 def focus_ZvsFWHM_plot(dataruntuple,known_energy,**kwargs):
     camcontrol.plt.plot(*list(zip(*[(x.run.z,fwhm_datarun(x.run,known_energy,**kwargs)) for x in dataruntuple])),label='fwhm v z')
     camcontrol.plt.show()
+
+def center_of_masses(arr2d):
+    def _cm(arr1d):
+        return np.dot(arr1d, np.arange(len(arr1d)))/np.sum(arr1d)
+    return np.array(list(map(_cm, arr2d)))
+
+def cmplot(datarun, smooth=0):
+    arr2d = np.transpose(datarun.run.get_array())
+    y = center_of_masses(arr2d)
+    x = np.arange(len(y))
+    if smooth != 0:
+        y = gfilt(y,smooth)
+    plt.plot(x, y, label = 'CM lineout')
+    plt.show()
+
+def fwhm_vs_row_plot(datarun,step=100):
+    plt.plot(*list(zip(*[(i+step/2,fwhm_datarun(datarun.run,2300,xrange=[i,i+step],rebin=2)) for i in range(0,2000,step)])),label='fwhm v row')
+    plt.show()
+    
+def focus_ThetavsFWHM_plot(dataruntuple,known_energy,**kwargs):
+    plt.plot(*list(zip(*[(x.run.theta,fwhm_datarun(x.run,known_energy,**kwargs)) for x in 
+                     dataruntuple])),label='fwhm v z')
+    plt.show()
