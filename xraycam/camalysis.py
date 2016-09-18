@@ -89,9 +89,9 @@ def plot_with_energy_scale(datarun,known_energy,yrange=[0,-1],xrange=[0,-1],rebi
     elif label != None and calcfwhm == True:
         s=' - '
         label=s.join((label,str(fwhm_ev(lineout_energyscale))))
-    plt.plot(*lineout_energyscale,label=label)
+    camcontrol.plt.plot(*lineout_energyscale,label=label)
     if show == True:
-        plt.show()
+        camcontrol.plt.show()
         
 def fwhm_datarun(datarun,known_energy,yrange=[0,-1],xrange=[0,-1],rebin=1,fwhm_smooth=2,**kwargs):
     """
@@ -108,5 +108,5 @@ def fwhm_datarun(datarun,known_energy,yrange=[0,-1],xrange=[0,-1],rebin=1,fwhm_s
     return format(r2 - r1, '.3f')
 
 def focus_ZvsFWHM_plot(dataruntuple,known_energy,**kwargs):
-    plt.plot(*list(zip(*[(x.run.z,fwhm_datarun(x.run,known_energy,**kwargs)) for x in dataruntuple])),label='fwhm v z')
-    plt.show()
+    camcontrol.plt.plot(*list(zip(*[(x.run.z,fwhm_datarun(x.run,known_energy,**kwargs)) for x in dataruntuple])),label='fwhm v z')
+    camcontrol.plt.show()
