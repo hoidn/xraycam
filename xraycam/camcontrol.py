@@ -7,6 +7,7 @@ import operator
 #import _thread
 import logging
 import os
+import time
 
 from functools import reduce
 
@@ -244,36 +245,65 @@ def set_detector(detid):
     else:
         raise ValueError("detector identifier: must be 'beaglebone' or 'zwo'")
 
+class RunSequence:
+    """
+    Class that creates a sequence of DataRun instances, letting each data collection
+    finish before beginning the next.
+    """
+    def __init__(self, prefix = None, number_runs = 0, run_prefix = None,
+            htime = None, **kwargs):
+        """
+        prefix : str
+            Datarun prefix prefix.
+        number_runs : int
+        htime : str
+        """
+        if htime is None:
+            raise ValueError("kwarg htime MUST be provided to instantiate RunSequence.")
+        if prefix is None:
+            prefixes = [str(time.time()) for _ in range(number_runs)]
+        else:
+            prefixes = [prefix + '_%d' % i for i in range(number_runs)]
+        self.funcalls = [lambda: DataRun(run_prefix = prefix, htime = htime, **kwargs)
+            for prefix in prefixes]
+
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        import time
+        try:
+            run = self.funcalls.pop()()
+        except IndexError:
+            raise StopIteration
+        prev_time = run.acquisition_time()
+        # Wait until run is complete
+        while True:
+            cur_time = run.acquisition_time()
+            if cur_time != prev_time:
+                prev_time = cur_time
+                time.sleep(1)
+        return run
+
+
 class RunSet:
     """
     Class containing a collection of DataRun instances.
     """
-    def __init__(self, dataruns):
+    def __init__(self, *args, **kwargs):
         """
-        dataruns : iterable containing `DataRun` instances.
-        prefixes : list of str
-            A list of dataset prefixes.
-        number_runs : int
-        run_prefix : str
-        
-        Instantiate a RunSet  using one or more DataRun instances.
+        TODO docstring
         """
-        self.dataruns = dataruns
-        self.name = reduce(operator.add, [r.arrayname for r in dataruns])
-        self.numExposures = reduce(operator.add, [r.numExposures for r in dataruns])
-
-    def __add__(self, other):
-        new = RunSet()
-        new.dataruns = self.dataruns + other.dataruns
-        return new
+        self.dataruns = RunSequence(*args, **kwargs)
 
     def insert(self,  datarun = None, *args, **kwargs):
         """
         datarun : DataRun
 
-        If datarun is provided, insert is into this RunSet. Otherwise
-        pass args and kwargs to the constructor for DataRun and insert
-        the resulting object into this RunSet.
+        If datarun is provided, insert is into this RunSet. Otherwise pass
+        args and kwargs to the constructor for DataRun and insert the resulting
+        object into this RunSet.
         """
         if datarun is None:
             datarun = DataRun(*args, **kwargs)
