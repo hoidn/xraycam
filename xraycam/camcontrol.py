@@ -266,26 +266,35 @@ class RunSequence:
             prefixes = [prefix + '_%d' % i for i in range(number_runs)]
         self.funcalls = [lambda prefix=prefix: DataRun(run_prefix = prefix, htime = htime, **kwargs)
             for prefix in prefixes]
+        self.current = None
 
 
     def __iter__(self):
         return self
 
-    def __next__(self):
+    def _wait_current_complete(self):
+        """
+        Wait until the current run has completed.
+        """
         import time
+        # Wait until current run is complete
+        if self.current is not None:
+            prev_time = self.current.acquisition_time()
+            while True:
+                cur_time = self.current.acquisition_time()
+                if cur_time != prev_time:
+                    prev_time = cur_time
+                    time.sleep(1)
+                else:
+                    break
+
+    def __next__(self):
+        self._wait_current_complete()
         try:
             run = self.funcalls.pop()()
+            self.current = run
         except IndexError:
             raise StopIteration
-        prev_time = run.acquisition_time()
-        # Wait until run is complete
-        while True:
-            cur_time = run.acquisition_time()
-            if cur_time != prev_time:
-                prev_time = cur_time
-                time.sleep(1)
-            else:
-                break
         return run
 
 
