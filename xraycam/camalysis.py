@@ -110,3 +110,17 @@ def fwhm_datarun(datarun,known_energy,yrange=[0,-1],xrange=[0,-1],rebin=1,fwhm_s
 def focus_ZvsFWHM_plot(dataruntuple,known_energy,**kwargs):
     camcontrol.plt.plot(*list(zip(*[(x.run.z,fwhm_datarun(x.run,known_energy,**kwargs)) for x in dataruntuple])),label='fwhm v z')
     camcontrol.plt.show()
+
+def center_of_masses(arr2d):
+    def _cm(arr1d):
+        return np.dot(arr1d, np.arange(len(arr1d)))/np.sum(arr1d)
+    return np.array(list(map(_cm, arr2d)))
+
+def cmplot(arr2d, smooth=0):
+
+    y = center_of_masses(arr2d)
+    x = np.arange(len(y))
+    if smooth != 0:
+        y = gfilt(y,smooth)
+    camcontrol.plt.plot(x, y, label = 'CM lineout')
+    camcontrol.plt.show()
