@@ -113,6 +113,11 @@ def cmplot(arr2d, smooth=0):
         y = gfilt(y,smooth)
     camcontrol.plt.plot(x, y, label = 'CM lineout')
     camcontrol.plt.show()
+
+def cropping_tool(datarun,step,known_energy=2014,calcfwhm=True,**kwargs):
+    [plot_with_energy_scale(datarun,known_energy,label='['+','.join((str(i),str(i+step)))+']',yrange=[i,i+step],
+                            show=False,calcfwhm=calcfwhm,peaknormalize=True,**kwargs) for i in range(0,2000,step)]
+    camcontrol.plt.show()
 # Below are functions which support the parabolic fitting.
 def _reorient_array(arr2d):
     """Take output from the get_array() method for dataruns from the new camera,
@@ -146,10 +151,10 @@ def quadfit(arr2d, smooth = 5):
     # For some reason a factor of -1 is needed
     return -a, -b, -c
 
-def get_parabolic_lineout(arr2d, nbins = None, fitregion = 'cm' , fitregionx = [0,-1], fitregiony = [0,-1],yrange=[0,-1],**kwargs):
+def get_parabolic_lineout(arr2d, nbins = None, fitregionmode = 'cm' , fitregionx = [0,-1], fitregiony = [0,-1],yrange=[0,-1],**kwargs):
     """Return lineout taken using parabolic bins"""
     # Fit only to specific region
-    if fitregion != 'cm':
+    if fitregionmode != 'cm':
         a, b, _ = quadfit(arr2d[fitregiony[0]:fitregiony[1],fitregionx[0]:fitregionx[1]])
     else: 
         # Fit around center of mass to get better parabolas
