@@ -74,8 +74,51 @@ def fwhm_ev(arr2d,fwhm_smooth=2):
     r1, r2 = spline.roots()
     return format(r2 - r1, '.3f')
     
-def plot_with_energy_scale(datarun,known_energy,yrange=[0,-1],xrange=[0,-1],rebin=1,show=True,peaknormalize=False, label=None,calcfwhm=False,**kwargs):
-    lineout = np.sum(datarun.get_array()[yrange[0]:yrange[1],xrange[0]:xrange[1]],axis=1)/datarun.photon_value
+def _reorient_array(arr2d):
+    """Take output from the get_array() method for dataruns from the new camera,
+    and reorient them to match what our usual analysis code expects."""
+    return np.transpose(arr2d[::,::-1])
+
+def quadfit(arr2d, smooth = 5):
+    """
+    Return the second- and first-order coefficients for a parabolic
+    fit to array of center of mass values of the rows of arr2d.
+    """
+    y = gfilt(center_of_masses(arr2d), smooth)# - np.percentile(filtered, 1)) *Note: changed gfilt to act on y instead of on 2d array.  Seems to produce better parabolas.
+    x = np.arange(len(y))
+    good = np.where(np.isfinite(y))[0]
+    a, b, c, = np.polyfit(x[good], y[good], 2)
+    # For some reason a factor of -1 is needed
+    return -a, -b, -c
+
+def get_parabolic_lineout(arr2d, nbins = None, fitregion = 'cm' , fitregionx = [0,-1], fitregiony = [0,-1],yrange=[0,-1],**kwargs):
+    """Return lineout taken using parabolic bins"""
+    # Fit only to specific region
+    if fitregion != 'cm':
+        a, b, _ = quadfit(arr2d[fitregiony[0]:fitregiony[1],fitregionx[0]:fitregionx[1]])
+    else: 
+        # Fit around center of mass to get better parabolas
+        cm = np.mean(center_of_masses(arr2d))
+        a, b, _ = quadfit(arr2d[fitregiony[0]:fitregiony[1],int(cm-150):int(cm+150)])
+    if yrange != [0,-1]: 
+        # crop the region in the lineout, but with parabolic parameters from the (possibly) different fitregion
+        arr2d = arr2d[yrange[0]:yrange[1],:]
+    num_rows, num_cols = arr2d.shape
+    if nbins is None:
+        nbins = num_cols
+    def chunks():
+        """Return array values grouped into chunks, one per bin"""
+        increment = int(num_rows * (num_cols/nbins))
+        _, sort_indices = parabolic_sort(a, b, arr2d.shape)
+        sort_data = arr2d[sort_indices].ravel()
+        return [sort_data[i:i + increment] for i in range(0, len(sort_data), increment)]
+    return np.array(list(map(np.sum, chunks())))
+
+def plot_with_energy_scale(datarun,known_energy,yrange=[0,-1],xrange=[0,-1],rebin=1,show=True,peaknormalize=False, label=None,calcfwhm=False,parabolic=False,**kwargs):
+    if parabolic == False:
+        lineout = np.sum(datarun.get_array()[yrange[0]:yrange[1],xrange[0]:xrange[1]],axis=1)/datarun.photon_value
+    else:
+        lineout = get_parabolic_lineout(_reorient_array(datarun.get_array()),yrange=yrange)[xrange[0]:xrange[1]] 
     if rebin != 1: #rebin using oliver's rebin_spectrum function
         lineout = _rebin_spectrum(np.array(range(len(lineout))),lineout,rebin)[1]
     if peaknormalize == True:
@@ -92,20 +135,6 @@ def plot_with_energy_scale(datarun,known_energy,yrange=[0,-1],xrange=[0,-1],rebi
     camcontrol.plt.plot(*lineout_energyscale,label=label)
     if show == True:
         camcontrol.plt.show()
-        
-def fwhm_datarun(datarun,known_energy,yrange=[0,-1],xrange=[0,-1],rebin=1,fwhm_smooth=2,**kwargs):
-    """
-    Given a 2d-array of [energies(eV),lineout], calculate fwhm of peak in the lineout.
-    """
-    lineout = np.sum(datarun.get_array()[yrange[0]:yrange[1],xrange[0]:xrange[1]],axis=1)/datarun.photon_value
-    if rebin != 1: #rebin using oliver's rebin_spectrum function
-        lineout = _rebin_spectrum(np.array(range(len(lineout))),lineout,rebin)[1]
-    lineout_energyscale=add_energy_scale(lineout,known_energy,rebinparam=rebin,**kwargs)
-    x, y = lineout_energyscale
-    y = gfilt(y,fwhm_smooth)
-    spline = UnivariateSpline(x, y - np.max(y)/2, s = 0)
-    r1, r2 = spline.roots()
-    return format(r2 - r1, '.3f')
 
 def focus_ZvsFWHM_plot(dataruntuple,known_energy,**kwargs):
     camcontrol.plt.plot(*list(zip(*[(x.run.z,fwhm_datarun(x.run,known_energy,**kwargs)) for x in dataruntuple])),label='fwhm v z')
