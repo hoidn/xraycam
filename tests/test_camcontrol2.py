@@ -15,7 +15,7 @@ l = list(rs)
 
 [ll.name for ll in l]
 
-ds = camcontrol.RunSet(prefix = 'foobar13', htime = '10s', number_runs = 5,
+ds = camcontrol.RunSet(prefix = 'foobar15', htime = '20s', number_runs = 2,
     decluster = False)
 
 list(ds.dataruns)
