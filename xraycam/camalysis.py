@@ -73,9 +73,12 @@ def fwhm_ev(arr2d,fwhm_smooth=2):
     spline = UnivariateSpline(x, y - np.max(y)/2, s = 0)
     r1, r2 = spline.roots()
     return format(r2 - r1, '.3f')
-    
-def plot_with_energy_scale(datarun,known_energy,yrange=[0,-1],xrange=[0,-1],rebin=1,show=True,peaknormalize=False, label=None,calcfwhm=False,**kwargs):
-    lineout = np.sum(datarun.get_array()[yrange[0]:yrange[1],xrange[0]:xrange[1]],axis=1)/datarun.photon_value
+
+def plot_with_energy_scale(datarun,known_energy,yrange=[0,-1],xrange=[0,-1],rebin=1,show=True,peaknormalize=False, label=None,calcfwhm=False,parabolic=False,**kwargs):
+    if parabolic == False:
+        lineout = np.sum(_reorient_array(datarun.get_array())[yrange[0]:yrange[1],xrange[0]:xrange[1]],axis=0)/datarun.photon_value
+    else:
+        lineout = get_parabolic_lineout(_reorient_array(datarun.get_array()),yrange=yrange)[xrange[0]:xrange[1]] 
     if rebin != 1: #rebin using oliver's rebin_spectrum function
         lineout = _rebin_spectrum(np.array(range(len(lineout))),lineout,rebin)[1]
     if peaknormalize == True:
@@ -92,20 +95,6 @@ def plot_with_energy_scale(datarun,known_energy,yrange=[0,-1],xrange=[0,-1],rebi
     camcontrol.plt.plot(*lineout_energyscale,label=label)
     if show == True:
         camcontrol.plt.show()
-        
-def fwhm_datarun(datarun,known_energy,yrange=[0,-1],xrange=[0,-1],rebin=1,fwhm_smooth=2,**kwargs):
-    """
-    Given a 2d-array of [energies(eV),lineout], calculate fwhm of peak in the lineout.
-    """
-    lineout = np.sum(datarun.get_array()[yrange[0]:yrange[1],xrange[0]:xrange[1]],axis=1)/datarun.photon_value
-    if rebin != 1: #rebin using oliver's rebin_spectrum function
-        lineout = _rebin_spectrum(np.array(range(len(lineout))),lineout,rebin)[1]
-    lineout_energyscale=add_energy_scale(lineout,known_energy,rebinparam=rebin,**kwargs)
-    x, y = lineout_energyscale
-    y = gfilt(y,fwhm_smooth)
-    spline = UnivariateSpline(x, y - np.max(y)/2, s = 0)
-    r1, r2 = spline.roots()
-    return format(r2 - r1, '.3f')
 
 def focus_ZvsFWHM_plot(dataruntuple,known_energy,**kwargs):
     camcontrol.plt.plot(*list(zip(*[(x.run.z,fwhm_datarun(x.run,known_energy,**kwargs)) for x in dataruntuple])),label='fwhm v z')
@@ -118,12 +107,13 @@ def center_of_masses(arr2d):
 
 def cmplot(datarun, smooth=0):
     arr2d = np.transpose(datarun.run.get_array())
+
     y = center_of_masses(arr2d)
     x = np.arange(len(y))
     if smooth != 0:
         y = gfilt(y,smooth)
-    plt.plot(x, y, label = 'CM lineout')
-    plt.show()
+    camcontrol.plot(x, y, label = 'CM lineout')
+    camcontrol.plt.show()
 
 def fwhm_vs_row_plot(datarun,step=100):
     plt.plot(*list(zip(*[(i+step/2,fwhm_datarun(datarun.run,2300,xrange=[i,i+step],rebin=2)) for i in range(0,2000,step)])),label='fwhm v row')
@@ -133,3 +123,63 @@ def focus_ThetavsFWHM_plot(dataruntuple,known_energy,**kwargs):
     plt.plot(*list(zip(*[(x.run.theta,fwhm_datarun(x.run,known_energy,**kwargs)) for x in 
                      dataruntuple])),label='fwhm v z')
     plt.show()
+
+def cropping_tool(datarun,step,known_energy=2014,calcfwhm=True,**kwargs):
+    [plot_with_energy_scale(datarun,known_energy,label='['+','.join((str(i),str(i+step)))+']',yrange=[i,i+step],
+                            show=False,calcfwhm=calcfwhm,peaknormalize=True,**kwargs) for i in range(0,2000,step)]
+    camcontrol.plt.show()
+# Below are functions which support the parabolic fitting.
+def _reorient_array(arr2d):
+    """Take output from the get_array() method for dataruns from the new camera,
+    and reorient them to match what our usual analysis code expects."""
+    return np.transpose(arr2d[::,::-1])
+
+
+def parabolic_sort(a, b, shape = (1024, 1280)):
+    """
+    Returns: z, (rowsort, colsort)
+    
+    z : 2d numpy array of shape `shape` with values x**2 + b * x + c,
+    where x is row index.
+    rowsort : sequence of row indices that sort z
+    colsort : sequence of column indices that sort z
+    """
+    x, y = np.indices(shape, dtype = 'int')
+    z = ((a * (x**2)) + (b * x) + y)
+    return z, np.unravel_index(
+                np.argsort(z.ravel()), z.shape)
+
+def quadfit(arr2d, smooth = 5):
+    """
+    Return the second- and first-order coefficients for a parabolic
+    fit to array of center of mass values of the rows of arr2d.
+    """
+    y = gfilt(center_of_masses(arr2d), smooth)# - np.percentile(filtered, 1)) *Note: changed gfilt to act on y instead of on 2d array.  Seems to produce better parabolas.
+    x = np.arange(len(y))
+    good = np.where(np.isfinite(y))[0]
+    a, b, c, = np.polyfit(x[good], y[good], 2)
+    # For some reason a factor of -1 is needed
+    return -a, -b, -c
+
+def get_parabolic_lineout(arr2d, nbins = None, fitregionmode = 'cm' , fitregionx = [0,-1], fitregiony = [0,-1],yrange=[0,-1],**kwargs):
+    """Return lineout taken using parabolic bins"""
+    # Fit only to specific region
+    if fitregionmode != 'cm':
+        a, b, _ = quadfit(arr2d[fitregiony[0]:fitregiony[1],fitregionx[0]:fitregionx[1]])
+    else: 
+        # Fit around center of mass to get better parabolas
+        cm = np.mean(center_of_masses(arr2d))
+        a, b, _ = quadfit(arr2d[fitregiony[0]:fitregiony[1],int(cm-150):int(cm+150)])
+    if yrange != [0,-1]: 
+        # crop the region in the lineout, but with parabolic parameters from the (possibly) different fitregion
+        arr2d = arr2d[yrange[0]:yrange[1],:]
+    num_rows, num_cols = arr2d.shape
+    if nbins is None:
+        nbins = num_cols
+    def chunks():
+        """Return array values grouped into chunks, one per bin"""
+        increment = int(num_rows * (num_cols/nbins))
+        _, sort_indices = parabolic_sort(a, b, arr2d.shape)
+        sort_data = arr2d[sort_indices].ravel()
+        return [sort_data[i:i + increment] for i in range(0, len(sort_data), increment)]
+    return np.array(list(map(np.sum, chunks())))
