@@ -105,15 +105,16 @@ def center_of_masses(arr2d):
         return np.dot(arr1d, np.arange(len(arr1d)))/np.sum(arr1d)
     return np.array(list(map(_cm, arr2d)))
 
-def cmplot(datarun, smooth=0):
+def cmplot(datarun, smooth=0,show=True):
     arr2d = np.transpose(datarun.run.get_array())
 
     y = center_of_masses(arr2d)
     x = np.arange(len(y))
     if smooth != 0:
         y = gfilt(y,smooth)
-    camcontrol.plot(x, y, label = 'CM lineout')
-    camcontrol.plt.show()
+    camcontrol.plt.plot(x, y, label = 'CM lineout')
+    if show == True:
+        camcontrol.plt.show()
 
 def fwhm_vs_row_plot(datarun,step=100):
     plt.plot(*list(zip(*[(i+step/2,fwhm_datarun(datarun.run,2300,xrange=[i,i+step],rebin=2)) for i in range(0,2000,step)])),label='fwhm v row')
@@ -156,7 +157,7 @@ def quadfit(arr2d, smooth = 5):
     """
     y = gfilt(center_of_masses(arr2d), smooth)# - np.percentile(filtered, 1)) *Note: changed gfilt to act on y instead of on 2d array.  Seems to produce better parabolas.
     x = np.arange(len(y))
-    good = np.where(np.isfinite(y))[0]
+    good = np.where(np.isfinite(y))[0] #note to self: is there assumption here that cutting out non-finite elements won't appreciably change the curvature?
     a, b, c, = np.polyfit(x[good], y[good], 2)
     # For some reason a factor of -1 is needed
     return -a, -b, -c
