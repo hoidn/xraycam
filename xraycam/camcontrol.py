@@ -14,7 +14,6 @@ from functools import reduce
 from . import utils
 from . import config
 
-
 # TODO: move this setting from config.py to detconfig.py
 if config.plotting_mode == 'notebook':
     from xraycam.mpl_plotly import plt
@@ -402,10 +401,10 @@ class Frame:
         new.data[hot_indices] = 0
         return new
 
-    def _raw_lineout(self):
-        return np.sum(self.data, axis = 0) / self.photon_value
+    def _raw_lineout(self, xrange=(0,-1), yrange=(0,-1),**kwargs):
+        return np.sum(self.data[yrange[0]:yrange[1],xrange[0]:xrange[1]], axis = 0) / self.photon_value
 
-    def get_lineout(self, rebin = 1, smooth = 0, xmin = 0, xmax = -1):
+    def get_lineout(self, energy=(None,None) , rebin = 1, smooth = 0, **kwargs):
         """
         Return a smoothed and rebinned lineout of self.data.
 
@@ -413,6 +412,10 @@ class Frame:
         number of pixel columns per bin
 
         Returns: bin values, intensities
+
+        Optionally add energy scale with tuple energy=(known energy, known bin).
+        If known_bin is None, max value of lineout is set to known_energy.
+        Returns: energies, intensities
         """
         def apply_smooth(arr1d):
             from scipy.ndimage.filters import gaussian_filter as gf
@@ -423,14 +426,24 @@ class Frame:
         if (not isinstance(rebin, int)) or rebin < 1:
             raise ValueError("Rebin must be a positive integer")
 
-        return compose(apply_rebin, apply_smooth)(self._raw_lineout()[xmin: xmax])
+        lineout =  compose(apply_rebin, apply_smooth)(self._raw_lineout(xrange=xrange,yrange=yrange))
+
+        #Add energy scale to lineout
+        if energy != (None,None):
+            from xraycam.camalysis import add_energy_scale
+            lineout_x, lineout_y = lineout
+            lineout = add_energy_scale(lineout_y,energy[0],known_bin=energy[1],rebinparam=rebin,camerainvert=True,braggorder=1)
+
+        return lineout
+
+
 
     def plot_lineout(self, smooth = 0, error_bars = False, rebin = 1, label = '',
-            show = True, peaknormalize = False, xmin = 0, xmax = -1):
+            show = True, peaknormalize = False, xmin = 0, xmax = -1,**kwargs):
         if not label:
             label = self.name
         return _plot_lineout(*self.get_lineout(rebin = rebin, smooth = smooth,
-                xmin = xmin, xmax = xmax),
+                xmin = xmin, xmax = xmax,**kwargs),
             show = show, error_bars = error_bars, label = label, peaknormalize = peaknormalize)
 
     def plot_histogram(self, show = True, calibrate = False, **kwargs):
