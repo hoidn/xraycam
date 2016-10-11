@@ -426,7 +426,7 @@ class Frame:
         if (not isinstance(rebin, int)) or rebin < 1:
             raise ValueError("Rebin must be a positive integer")
 
-        lineout =  compose(apply_rebin, apply_smooth)(self._raw_lineout(xrange=xrange,yrange=yrange))
+        lineout =  compose(apply_rebin, apply_smooth)(self._raw_lineout(**kwargs))
 
         #Add energy scale to lineout
         if energy != (None,None):
@@ -439,11 +439,10 @@ class Frame:
 
 
     def plot_lineout(self, smooth = 0, error_bars = False, rebin = 1, label = '',
-            show = True, peaknormalize = False, xmin = 0, xmax = -1,**kwargs):
+            show = True, peaknormalize = False, **kwargs):
         if not label:
             label = self.name
-        return _plot_lineout(*self.get_lineout(rebin = rebin, smooth = smooth,
-                xmin = xmin, xmax = xmax,**kwargs),
+        return _plot_lineout(*self.get_lineout(rebin = rebin, smooth = smooth,**kwargs),
             show = show, error_bars = error_bars, label = label, peaknormalize = peaknormalize)
 
     def plot_histogram(self, show = True, calibrate = False, **kwargs):
@@ -464,3 +463,20 @@ class Frame:
         if elapsed is None:
             elapsed = self.time
         return np.sum(self._raw_lineout()[start:end]) / self.time
+
+class Monitor:
+    def __init__(self, *args, transpose = True, vmax = 150, rebin = 1, **kwargs):
+        self.run = DataRun(*args, **kwargs)
+        self.vmax = vmax
+        self.rebin = rebin
+
+    def frame(self):
+        return self.run.get_frame()
+    
+    def update(self):
+        self.run.show(vmax = self.vmax)
+        self.run.plot_lineout(rebin = self.rebin)
+        self.frame().plot_histogram(xmin = 0, xmax = self.vmax)
+        
+    def stop(self):
+        self.run.stop()

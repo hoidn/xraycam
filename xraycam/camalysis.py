@@ -81,7 +81,7 @@ def plot_with_energy_scale(datarun,known_energy,yrange=[0,-1],xrange=[0,-1],rebi
         lineout = get_parabolic_lineout(_reorient_array(datarun.get_array()),yrange=yrange)[xrange[0]:xrange[1]] 
     if rebin != 1: #rebin using oliver's rebin_spectrum function
         lineout = _rebin_spectrum(np.array(range(len(lineout))),lineout,rebin)[1]
-    if peaknormalize == True:
+    if peaknormalize:
         lineout = lineout / max(lineout)
     lineout_energyscale=add_energy_scale(lineout,known_energy,rebinparam=rebin,**kwargs)
     if label == None and calcfwhm == False:
