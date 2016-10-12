@@ -1,3 +1,5 @@
+from __future__ import with_statement
+from __future__ import absolute_import
 import zmq
 import time
 import numpy as np
@@ -12,27 +14,29 @@ import os
 
 from . import zmq_comm
 from . import utils
+from io import open
+from itertools import izip
 
-PKG_NAME = __name__.split('.')[0]
+PKG_NAME = __name__.split(u'.')[0]
 
 NCORES = 1
 
 # communication with ZWO camera capture program
 context = zmq.Context()
 
-def cache_put(obj, key = None, cachedir = 'cache/'):
-    """
+def cache_put(obj, key = None, cachedir = u'cache/'):
+    u"""
     Push an object to a persistent cache stored on disk.
     """
     if not os.path.isdir(cachedir):
         os.makedirs(cachedir)
     if key is None:
         key = utils.hash_obj(obj)
-    with open(cachedir + '/' + key, 'wb') as f:
+    with open(cachedir + u'/' + key, u'wb') as f:
         dill.dump(obj, f)
 
-def cache_get(key, cachedir = 'cache/'):
-    with open(cachedir + '/' + key, 'rb') as f:
+def cache_get(key, cachedir = u'cache/'):
+    with open(cachedir + u'/' + key, u'rb') as f:
         obj = dill.load(f)
     return obj
 
@@ -42,9 +46,9 @@ def do_decluster(arr2d, threshold, dtype = np.uint8):
     # TODO: add support for uint8 arrays in the c module
     arr1d = np.ascontiguousarray(arr2d.ravel(), dtype = np.uint8)
     declustered = np.zeros_like(arr1d)
-    arr_uint = npct.ndpointer(dtype = np.uint8, ndim = 1, flags = 'C_CONTIGUOUS')
+    arr_uint = npct.ndpointer(dtype = np.uint8, ndim = 1, flags = u'C_CONTIGUOUS')
     # load the c extension
-    libcd = npct.load_library("libclusters", utils.resource_path("../lib/",  PKG_NAME))
+    libcd = npct.load_library(u"libclusters", utils.resource_path(u"../lib/",  PKG_NAME))
 
     libcd.searchFrame_array_8.restype = None
     libcd.searchFrame_array_8.argtypes = [arr_uint, arr_uint, c_int, c_int, c_int]
@@ -75,9 +79,9 @@ def sink_function(current, arr):
     #arr = np.frombuffer(msg, dtype = 'uint8').reshape(10, 10)
     #time.sleep(0.1)
     if current is None:
-        print ('hello world')
+        print u'hello world'
         #return np.zeros((10, 10), dtype = 'uint32')
-        return arr.astype('uint32')
+        return arr.astype(u'uint32')
     else:
         #print ('shape: ', current.shape, 'sum: ', np.sum(current))
         return current + arr
@@ -85,28 +89,28 @@ def sink_process():
     zmq_comm.start_sink_routine(sink_function)
 
 def init_workers():
-    """
+    u"""
     Start a dummy worker process that keeps up with frames from the ventilator.
     """
     loc = locals()
-    workers = [launch_process(make_worker_function(0, decluster = False)) for n in range(NCORES)]
+    workers = [launch_process(make_worker_function(0, decluster = False)) for n in xrange(NCORES)]
 
-class ZRun:
-    """
+class ZRun(object):
+    u"""
     TODO.
     """
-    def __init__(self, run_prefix = '',  window_min = 0,
+    def __init__(self, run_prefix = u'',  window_min = 0,
             window_max = 255, threshold = 10, decluster = True, htime = None):
             self.name = run_prefix
-            self.attrs = ['_time_start', 'initial_array', '_total_time', '_final_array']
+            self.attrs = [u'_time_start', u'initial_array', u'_total_time', u'_final_array']
             # TODO: entire dict in one file
             try:
                 attrs = self.attrs
                 keys = [run_prefix + a for a in attrs]
-                values = [cache_get(k, cachedir = 'cache/') for k, a in zip(keys, attrs)]
-                for a, v in zip(attrs, values):
+                values = [cache_get(k, cachedir = u'cache/') for k, a in izip(keys, attrs)]
+                for a, v in izip(attrs, values):
                     self.__dict__[a] = v
-                print ("Loaded from cache.")
+                print u"Loaded from cache."
             # Do an actual data collection
             except FileNotFoundError:
                 self._time_start = time.time()
@@ -120,15 +124,15 @@ class ZRun:
 
                 if htime is not None:
                     def timeit():
-                        print( "starting acquisition")
+                        print u"starting acquisition"
                         time.sleep(humanfriendly.parse_timespan(htime))
                         self.stop()
-                        print("stopped acquisistion")
+                        print u"stopped acquisistion"
                     t_thread = Thread(target = timeit, args = ())
                     t_thread.start()
 
     def replace_workers(self, worker_function):
-        """
+        u"""
         Replace all current workers by processes running worker_function.
         """
         # Terminate and replace the current worker processes
@@ -146,14 +150,14 @@ class ZRun:
 
 
     def stop(self):
-        """
+        u"""
         Stop the acquisition.
         """
         self._final_array = self.get_array()
         self._total_time = time.time() - self._time_start
 
         keys = [self.name + a for a in self.attrs]
-        for k, a in zip(keys, self.attrs):
+        for k, a in izip(keys, self.attrs):
             cache_put(self.__dict__[a], key = k)
 
         self.replace_workers(dummy_worker)
@@ -167,7 +171,7 @@ class ZRun:
             return elapsed
 
     def get_array(self):
-        """
+        u"""
         Get the sum of exposures in this data run.
         """
         try:
@@ -175,7 +179,7 @@ class ZRun:
         except AttributeError:
             socket = context.socket(zmq.SUB)
             socket.connect(zmq_comm.client_addr)
-            socket.setsockopt(zmq.SUBSCRIBE, b'')
+            socket.setsockopt(zmq.SUBSCRIBE, '')
             result = zmq_comm.recv_array(socket)
             socket.close()
             try:
@@ -189,7 +193,7 @@ class ZRun:
 # initial worker
 loc = locals()
 dummy_worker = make_worker_function(0, decluster = False)
-workers = [launch_process(dummy_worker) for n in range(NCORES)]
+workers = [launch_process(dummy_worker) for n in xrange(NCORES)]
 
 time.sleep(0.2)
 launch_process(sink_process)
@@ -197,4 +201,4 @@ launch_process(sink_process)
 # Launch OAcapture
 # TODO: This process shouldn't persist when the parent dies.
 # set daemon attribute to True so that child processes die with the parent
-os.system('oacapture &> /dev/null &')
+os.system(u'oacapture &> /dev/null &')

@@ -1,14 +1,15 @@
 #!/usr/bin/env python
 
-"""
+u"""
 ZeroMQ asynchronous socket pair synchronizer.
 """
 
+from __future__ import absolute_import
 import numbers
 import zmq
 
-def sync_pub(sock, ids, sync_addr='ipc://sync', timeout=10):
-    """
+def sync_pub(sock, ids, sync_addr=u'ipc://sync', timeout=10):
+    u"""
     Synchronize a single PUB socket with multiple SUB sockets.
     Must be paired with a call to `sync_sub`.
 
@@ -39,7 +40,7 @@ def sync_pub(sock, ids, sync_addr='ipc://sync', timeout=10):
         # ids indicates the number of subscribers:
         id_set = set()
         while True:
-            sock.send(b'')
+            sock.send('')
 
             if sock_sync.poll(timeout):
                 id, _ = sock_sync.recv_multipart()
@@ -51,7 +52,7 @@ def sync_pub(sock, ids, sync_addr='ipc://sync', timeout=10):
         # ids contains the subscriber sync port IDs:
         id_set = set(ids)
         while True:
-            sock.send(b'')
+            sock.send('')
 
             if sock_sync.poll(timeout):
                 id, _ = sock_sync.recv_multipart()
@@ -62,8 +63,8 @@ def sync_pub(sock, ids, sync_addr='ipc://sync', timeout=10):
             if not id_set:
                 break
 
-def sync_sub(sock, id, sync_addr='ipc://sync', timeout=10):
-    """
+def sync_sub(sock, id, sync_addr=u'ipc://sync', timeout=10):
+    u"""
     Synchronize a SUB socket with a single PUB socket.
     Must be paired with a call to `sync_pub`.
 
@@ -93,11 +94,11 @@ def sync_sub(sock, id, sync_addr='ipc://sync', timeout=10):
     while True:
         if sock.poll(timeout):
             sock.recv()
-            sock_sync.send(b'')
+            sock_sync.send('')
             break
 
-def sync_router(sock, ids, sync_addr='ipc://sync', timeout=10):
-    """
+def sync_router(sock, ids, sync_addr=u'ipc://sync', timeout=10):
+    u"""
     Synchronize a single ROUTER socket with multiple DEALER sockets.
     Must be paired with a call to `sync_dealer`.
 
@@ -121,21 +122,21 @@ def sync_router(sock, ids, sync_addr='ipc://sync', timeout=10):
     id_set = set(ids)
     while True:
         for id in id_set:
-            sock.send_multipart([id, b''])
+            sock.send_multipart([id, ''])
         if sock_sync.poll(timeout):
             id, _ = sock_sync.recv_multipart()
 
             # Make the last sync message different so that the dealer
             # will know when to stop discarding messages:
             if id in id_set:
-                sock.send_multipart([id, 'done'])
+                sock.send_multipart([id, u'done'])
                 id_set.remove(id)
 
         if not id_set:
             break
 
-def sync_dealer(sock, id=None, sync_addr='ipc://sync', timeout=10):
-    """
+def sync_dealer(sock, id=None, sync_addr=u'ipc://sync', timeout=10):
+    u"""
     Synchronize a DEALER socket with a single ROUTER socket.
     Must be paired with a call to `sync_router`.
 
@@ -166,11 +167,11 @@ def sync_dealer(sock, id=None, sync_addr='ipc://sync', timeout=10):
         if sock.poll(timeout):
             
             msg = sock.recv()
-            sock_sync.send(b'')
+            sock_sync.send('')
 
             # Discard messages until the last synchronization message is
             # received:
             while sock.poll(timeout):
-                if sock.recv() == 'done':
+                if sock.recv() == u'done':
                     break
             break

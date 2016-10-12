@@ -1,6 +1,7 @@
+from __future__ import absolute_import
 import paramiko
 class Server(object):
-    """
+    u"""
     Wraps paramiko for super-simple SFTP uploading and downloading.
     """
 
@@ -17,7 +18,7 @@ class Server(object):
         self.sftp.get(remote, local)
 
     def close(self):
-        """
+        u"""
         Close the connection if it's active
         """
 
