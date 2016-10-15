@@ -11,16 +11,26 @@ import time
 
 from functools import reduce
 
+#BEGIN:below lines for interfacing with flask
+# import sys
+# sys.path.append(os.path.expanduser('~/xraycam/xraycam'))
+# import utils.utils
+# import config
+#END
+
 from . import utils
 from . import config
 
 # TODO: move this setting from config.py to detconfig.py
-if config.plotting_mode == 'notebook':
-    from xraycam.mpl_plotly import plt
-    #import sys
-    #sys.stdout = open(config.logfile_path, 'w')
-else:
-    import matplotlib.pyplot as plt
+
+
+if config.plotting_mode != 'minigui':
+    if config.plotting_mode == 'notebook':
+        from xraycam.mpl_plotly import plt
+        #import sys
+        #sys.stdout = open(config.logfile_path, 'w')
+    else:
+        import matplotlib.pyplot as plt
 
 logging.basicConfig(filename='xraycam.log', level=logging.DEBUG)
 
@@ -78,7 +88,7 @@ def _longest_common_substring(s1, *rest):
         for y in range(1, 1 + len(s2)):
             if s1[x - 1] == s2[y - 1]:
                 m[x][y] = m[x - 1][y - 1] + 1
-                if m[x][y] > longest:
+                if m[x][y] > longest:   
                     longest = m[x][y]
                     x_longest = x
             else:
