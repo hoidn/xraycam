@@ -184,3 +184,34 @@ def get_parabolic_lineout(arr2d, nbins = None, fitregionmode = 'cm' , fitregionx
         sort_data = arr2d[sort_indices].ravel()
         return [sort_data[i:i + increment] for i in range(0, len(sort_data), increment)]
     return np.array(list(map(np.sum, chunks())))
+
+def get_peaks(lineout,interp=True,**kwargs):
+    """Get location of peaks using PeakUtils package.
+    Format should be lineout=[energies,intensities].
+    Returns [peaks_x,peaks_y].
+    Peaks_x location is optionally improved using interpolation.
+    Interpolation is hard-coded for Gaussian.  Can be modified for centroid, others."""
+    
+    #Import peak-detection package if not already loaded.
+    import peakutils
+    
+    #Get thres and min_dist for peak-detection, set default if not provided
+    thres = kwargs.get('thres',0.75)
+    min_dist = kwargs.get('min_dist',30)
+    width = kwargs.get('width',10)
+    
+    #Find peak indices
+    x, y = lineout
+    indexes = peakutils.indexes(y,thres=thres,min_dist=min_dist)
+    peaks_x, peaks_y = lineout[0][indexes], lineout[1][indexes]
+    
+    #Improve peak location by fitting function locally around detected peaks in the data.  Default is gaussian.
+    if interp:
+        peaks_x=[]
+        peaks_y=[]
+        for i in indexes:
+            a,b,c = peakutils.peak.gaussian_fit(x[int(i-width):int(i+width)],y[int(i-width):int(i+width)],center_only=False)
+            peaks_x.append(b)
+            peaks_y.append(a)
+
+    return np.array([peaks_x,peaks_y])
