@@ -1,6 +1,15 @@
 tests/data
 logging/data
 examples/data
+examples/cache
+examples/.ipynb_checkpoints
+ALS_Run_Sept2016
+examples/*.ipynb
+examples/*.txt
+logging/.ipynb_checkpoints
+.idea
+.ipynb_checkpoints
+*csv
 *pyc
 *bak
 *swp

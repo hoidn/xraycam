@@ -300,7 +300,7 @@ class RunSequence:
     def __next__(self):
         self._wait_current_complete()
         try:
-            run = self.funcalls.pop()()
+            run = self.funcalls.pop(0)()
             self.current = run
         except IndexError:
             raise StopIteration
@@ -315,6 +315,8 @@ class RunSet:
         """
         TODO docstring
         """
+
+    def from_multiple_exposure():
         from xraycam import async
         self.dataruns = async.IterThread(RunSequence(*args, **kwargs))
 
