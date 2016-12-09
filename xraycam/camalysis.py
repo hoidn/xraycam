@@ -160,7 +160,7 @@ def quadfit(arr2d, smooth = 5):
     good = np.where(np.isfinite(y))[0] #note to self: is there assumption here that cutting out non-finite elements won't appreciably change the curvature?
     a, b, c, = np.polyfit(x[good], y[good], 2)
     # For some reason a factor of -1 is needed
-    return -a, -b, -c
+    return a, b, c
 
 def get_parabolic_lineout(arr2d, nbins = None, fitregionmode = 'cm' , fitregionx = [0,-1], fitregiony = [0,-1],yrange=[0,-1],**kwargs):
     """Return lineout taken using parabolic bins"""
