@@ -117,13 +117,13 @@ def cmplot(datarun, smooth=0,show=True):
         camcontrol.plt.show()
 
 def fwhm_vs_row_plot(datarun,step=100):
-    plt.plot(*list(zip(*[(i+step/2,fwhm_datarun(datarun.run,2300,xrange=[i,i+step],rebin=2)) for i in range(0,2000,step)])),label='fwhm v row')
-    plt.show()
+    camcontrol.plt.plot(*list(zip(*[(i+step/2,fwhm_datarun(datarun.run,2300,xrange=[i,i+step],rebin=2)) for i in range(0,2000,step)])),label='fwhm v row')
+    camcontrol.plt.show()
     
 def focus_ThetavsFWHM_plot(dataruntuple,known_energy,**kwargs):
-    plt.plot(*list(zip(*[(x.run.theta,fwhm_datarun(x.run,known_energy,**kwargs)) for x in 
+    camcontrol.plt.plot(*list(zip(*[(x.run.theta,fwhm_datarun(x.run,known_energy,**kwargs)) for x in 
                      dataruntuple])),label='fwhm v z')
-    plt.show()
+    camcontrol.plt.show()
 
 def cropping_tool(datarun,step,known_energy=2014,calcfwhm=True,**kwargs):
     [plot_with_energy_scale(datarun,known_energy,label='['+','.join((str(i),str(i+step)))+']',yrange=[i,i+step],
