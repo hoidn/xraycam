@@ -106,7 +106,7 @@ def center_of_masses(arr2d):
     return np.array(list(map(_cm, arr2d)))
 
 def cmplot(datarun, smooth=0,show=True):
-    arr2d = np.transpose(datarun.run.get_array())
+    arr2d = np.rot90(datarun.run.get_array()) # trying rot90 instead of transpose
 
     y = center_of_masses(arr2d)
     x = np.arange(len(y))
@@ -215,3 +215,12 @@ def get_peaks(lineout,interp=True,**kwargs):
             peaks_y.append(a)
 
     return np.array([peaks_x,peaks_y])
+
+def anglecounts(runlist):
+    thetalist = [x.run.theta for x in runlist]
+    countlist = [x.run.counts_per_second() for x in runlist]
+    from xraycam.camcontrol import plt
+    plt.plot(*[[thetalist[i] for i in np.argsort(thetalist)],[countlist[i] for i in np.argsort(thetalist)]], label='counts vs angle')
+    plt.xlabel('theta (deg)')
+    plt.ylabel('counts/sec')
+    plt.show()

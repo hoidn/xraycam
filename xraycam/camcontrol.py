@@ -492,3 +492,18 @@ class Monitor:
         
     def stop(self):
         self.run.stop()
+
+def runlist(name,number,time=None,theta=None,z=None):
+    monitorinstance = Monitor(threshold = 2, window_min = 120, window_max = 132, photon_value = 126,
+            run_prefix = name+str(number), htime=time)
+    monitorinstance.run.theta=theta
+    monitorinstance.run.z=z
+    return monitorinstance
+
+def runlist_update(runlist,**kwargs):
+    print([x.run.counts_per_second() for x in runlist])
+    print([x.run.acquisition_time() for x in runlist])
+    [x.run.plot_lineout(energy=(2465.89,None),yrange=[0,None],rebin=3, 
+                        peaknormalize=True,show=False, label=str(x.run.theta)+' deg') for x in runlist]
+    plt.show()
+
