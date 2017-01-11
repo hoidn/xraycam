@@ -43,7 +43,7 @@ def fit_resid_plotly(lmfitoutput,xvalues,xrange=None,poisson=False,comptraces=[]
         i=0
         if not complabels:
             complabels=['comp%d'% j for j in range(len(comptraces))]
-        for tr in comptraces:
+        for tr in reversed(comptraces):
             data.append(go.Scatter(x=tr[0],y=tr[1],xaxis='x',yaxis='y2',name=complabels[i]))#,visible='legendonly'))
             i+=1
     
@@ -268,6 +268,10 @@ class do_four_peak_fit:
         else:
             self.complist=[comp1,comp2]
 
+    def save_csv(self,filename):
+        savedata = np.array([self.lineoutx,self.lineouty,self.out.best_fit,self.complist[0][1],self.complist[1][1]])#,self.complist[2][1]])
+        np.savetxt(filename,savedata,delimiter=',',header='xvalues,rawdata,fit,comp0,comp1,comp2')
+        print('file saved as:',filename)
 
 # Old version
 # class do_four_peak_fit:
