@@ -507,3 +507,12 @@ def runlist_update(runlist,**kwargs):
                         peaknormalize=True,show=False, label=str(x.run.theta)+' deg') for x in runlist]
     plt.show()
 
+def save_lineout_csv(datarun,filename,**kwargs):
+    try:
+        lineoutx, lineouty = datatrun.get_frame().get_lineout(**kwargs)
+    except AttributeError:
+        lineoutx, lineouty = datatrun.run.get_frame().get_lineout(**kwargs)
+    savedata = np.array([self.lineoutx,self.lineouty])
+    plotoptionsstring = 
+    np.savetxt(filename,savedata,delimiter=',',header='Energies(eV),Intensities',comments='# '+str(kwargs))
+    print('file save as: ',filename)
