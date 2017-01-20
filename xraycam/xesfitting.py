@@ -66,9 +66,12 @@ def splitting(lmfitout,v1str,v2str):
     v2center = lmfitout.best_values[v2str+'_center']
     return v2center-v1center
 
+pkalpha2peakfitprofile = dict(v1_gamma=0.3,v1_center=2013,
+    v2_center=2013.8,bg_intercept=-2013)
+
 class do_peak_fit:
     
-    def __init__(self,lineout, numpeaks=2,sample='sample'):
+    def __init__(self,lineout, numpeaks=2,sample='sample',initialprofile=pkalpha2peakfitprofile):
         self.sample=sample
         self.lineoutx=lineout[0]
         self.lineouty=lineout[1]
@@ -85,6 +88,7 @@ class do_peak_fit:
         self.pars=self.voigt1.make_params()
         self.pars.update(self.voigt2.make_params())
         self.pars.update(self.linbg.make_params())
+        self.initialprofile=initialprofile
         self.initialize_pars()
         self.complist=[]
     
@@ -99,12 +103,14 @@ class do_peak_fit:
         self.pars['v2_sigma'].set(expr='v1_sigma')
         self.pars['v1_gamma'].set(vary=True)
         self.pars['v2_gamma'].set(expr='v1_gamma')
-        self.pars['v1_gamma'].set(value=0.3)
-        self.pars['v1_center'].set(value=2013)
-        self.pars['v2_center'].set(value=2013.8)
+        #self.pars['v1_gamma'].set(value=0.3)
+        #self.pars['v1_center'].set(value=2013)
+        #self.pars['v2_center'].set(value=2013.8)
         self.pars['v1_amplitude'].set(value=max(self.lineouty)/2)
         self.pars['v2_amplitude'].set(value=max(self.lineouty))
-        self.pars['bg_intercept'].set(value=-2014)
+        #self.pars['bg_intercept'].set(value=-2014)
+        for k,v in self.initialprofile.items():
+            self.pars[k].set(value=v)
         
     def run_fit(self):
         self.out = self.model.fit(self.lineouty,self.pars,x=self.lineoutx)
@@ -149,10 +155,13 @@ class do_peak_fit:
     def spin_splitting(self):
         split = self.out.best_values['v2_center']-self.out.best_values['v1_center']
         print('Ka1/Ka2 spin-split is : ',split)
+
+pkalpha4peakfitprofile = dict(v1_gamma=0.3,v1_center=2013,v2_center=2013.8,
+    v3_center=2014.5-0.8,v4_center=2014.5,bg_intercept=-2014)
         
 class do_four_peak_fit:
     
-    def __init__(self,lineout,linear=True,sample='sample'):
+    def __init__(self,lineout,linear=True,sample='sample',initialprofile=pkalpha4peakfitprofile):
         self.sample=sample
         self.lineoutx=lineout[0]
         self.lineouty=lineout[1]
@@ -161,6 +170,7 @@ class do_four_peak_fit:
         self.voigt3 = models.VoigtModel(prefix='v3_')
         self.voigt4 = models.VoigtModel(prefix='v4_')
         self.linbg = models.LinearModel(prefix='bg_')
+        self.initialprofile=initialprofile
         if linear:
             self.model = self.voigt1+self.voigt2+self.voigt3+self.voigt4+self.linbg
             self.linterm = True
@@ -189,15 +199,17 @@ class do_four_peak_fit:
         self.pars['v2_gamma'].set(expr='v1_gamma')
         self.pars['v3_gamma'].set(expr='v1_gamma')
         self.pars['v4_gamma'].set(expr='v1_gamma')
-        self.pars['v1_gamma'].set(value=0.3)
-        self.pars['v1_center'].set(value=2013)
-        self.pars['v2_center'].set(value=2013.8)
-        self.pars['v3_center'].set(value=2014.5-.8)
-        self.pars['v4_center'].set(value=2014.5)
-        self.pars['v1_amplitude'].set(value=max(self.lineouty)/4)
-        self.pars['v2_amplitude'].set(value=max(self.lineouty)/2)
-        self.pars['v3_amplitude'].set(value=max(self.lineouty)/4)
-        self.pars['v4_amplitude'].set(value=max(self.lineouty)/2)
+        #self.pars['v1_gamma'].set(value=0.3)
+        #self.pars['v1_center'].set(value=2013)
+        #self.pars['v2_center'].set(value=2013.8)
+        #self.pars['v3_center'].set(value=2014.5-.8)
+        #self.pars['v4_center'].set(value=2014.5)
+        for k,v in self.initialprofile.items():
+            self.pars[k].set(value=v)
+        self.pars['v1_amplitude'].set(value=max(self.lineouty)/3)
+        self.pars['v2_amplitude'].set(value=max(self.lineouty)/1.5)
+        self.pars['v3_amplitude'].set(value=max(self.lineouty)/3)
+        self.pars['v4_amplitude'].set(value=max(self.lineouty)/1.5)
         if self.linterm:
             self.pars['bg_intercept'].set(value=-2014)
         

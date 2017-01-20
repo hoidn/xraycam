@@ -224,3 +224,26 @@ def anglecounts(runlist):
     plt.xlabel('theta (deg)')
     plt.ylabel('counts/sec')
     plt.show()
+
+def peaklocation_vs_theta(datarunlist,dosort=True,show=True,usetheta=True,useenergy=True,interp=True):
+    if usetheta:
+        thetalist = [x.run.theta for x in datarunlist]
+    else:
+        thetalist = np.arange(len(datarunlist))
+    if useenergy:
+        energy = (2307,400)
+    else:
+        energy = (None, None)
+    peaklist = [get_peaks(x.run.get_frame().get_lineout(energy=energy),interp=interp)[0,0] for x in datarunlist]
+    xylist = np.array([thetalist,peaklist])
+    if dosort:
+        xylist = xylist.T[np.argsort(thetalist)].T
+    plt.plot(*xylist,label='')
+    if usetheta:
+        plt.xlabel('theta (deg)')
+    else:
+        plt.xlabel('run order')
+    plt.ylabel('peaklocation (eV)')
+    if show:
+        plt.show()
+    return xylist
