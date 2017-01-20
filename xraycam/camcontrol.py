@@ -500,12 +500,19 @@ def runlist(name,number,time=None,theta=None,z=None):
     monitorinstance.run.z=z
     return monitorinstance
 
-def runlist_update(runlist,**kwargs):
+def runlist_update(runlist,show=True,label='',**kwargs):
     print([x.run.counts_per_second() for x in runlist])
     print([x.run.acquisition_time() for x in runlist])
-    [x.run.plot_lineout(energy=(2465.89,None),yrange=[0,None],rebin=3, 
-                        peaknormalize=True,show=False, label=str(x.run.theta)+' deg') for x in runlist]
-    plt.show()
+    
+    plotdict=dict(energy=(None,None),yrange=[800,1600],rebin=3, peaknormalize=False)
+    for key, value in kwargs.items():
+        if key in plotdict:
+            plotdict[key]=value
+    
+    [x.run.plot_lineout(**plotdict,show=False) for x in runlist]
+                        #label=str(x.run.z)+'mm'+' - '+fwhm_ev(x.run.get_frame().get_lineout(**plotdict))+'eV') for x in runlist]
+    if show:
+        plt.show()
 
 def save_lineout_csv(datarun,filename,**kwargs):
     try:
