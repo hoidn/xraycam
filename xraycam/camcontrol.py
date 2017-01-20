@@ -509,10 +509,14 @@ def runlist_update(runlist,**kwargs):
 
 def save_lineout_csv(datarun,filename,**kwargs):
     try:
-        lineoutx, lineouty = datatrun.get_frame().get_lineout(**kwargs)
+        lineoutx, lineouty = datarun.get_frame().get_lineout(**kwargs)
+        acquisitiontime = datarun.acquisition_time()
+        countrate = datarun.counts_per_second()
     except AttributeError:
-        lineoutx, lineouty = datatrun.run.get_frame().get_lineout(**kwargs)
-    savedata = np.array([self.lineoutx,self.lineouty])
-    plotoptionsstring = 
-    np.savetxt(filename,savedata,delimiter=',',header='Energies(eV),Intensities',comments='# '+str(kwargs))
-    print('file save as: ',filename)
+        lineoutx, lineouty = datarun.run.get_frame().get_lineout(**kwargs)
+        acquisitiontime = datarun.run.acquisition_time()
+        countrate = datarun.run.counts_per_second()
+    savedata = np.array([lineoutx,lineouty])
+    headerstr = 'Plot options: '+str(kwargs)+'\nCount rate: '+str(countrate)+'\nAcquisition time: '+str(acquisitiontime)+'\nEnergies(eV),Intensities'
+    np.savetxt(filename,savedata,delimiter=',',header=headerstr)
+    print('file saved as: ',filename)
