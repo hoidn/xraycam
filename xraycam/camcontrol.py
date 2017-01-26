@@ -11,17 +11,26 @@ import time
 
 from functools import reduce
 
+#BEGIN:below lines for interfacing with flask
+# import sys
+# sys.path.append(os.path.expanduser('~/xraycam/xraycam'))
+# import utils.utils
+# import config
+#END
+
 from . import utils
 from . import config
 
-
 # TODO: move this setting from config.py to detconfig.py
-if config.plotting_mode == 'notebook':
-    from xraycam.mpl_plotly import plt
-    #import sys
-    #sys.stdout = open(config.logfile_path, 'w')
-else:
-    import matplotlib.pyplot as plt
+
+
+if config.plotting_mode != 'minigui':
+    if config.plotting_mode == 'notebook':
+        from xraycam.mpl_plotly import plt
+        #import sys
+        #sys.stdout = open(config.logfile_path, 'w')
+    else:
+        import matplotlib.pyplot as plt
 
 logging.basicConfig(filename='xraycam.log', level=logging.DEBUG)
 
@@ -79,7 +88,7 @@ def _longest_common_substring(s1, *rest):
         for y in range(1, 1 + len(s2)):
             if s1[x - 1] == s2[y - 1]:
                 m[x][y] = m[x - 1][y - 1] + 1
-                if m[x][y] > longest:
+                if m[x][y] > longest:   
                     longest = m[x][y]
                     x_longest = x
             else:
@@ -291,7 +300,7 @@ class RunSequence:
     def __next__(self):
         self._wait_current_complete()
         try:
-            run = self.funcalls.pop()()
+            run = self.funcalls.pop(0)()
             self.current = run
         except IndexError:
             raise StopIteration
@@ -306,6 +315,8 @@ class RunSet:
         """
         TODO docstring
         """
+
+    def from_multiple_exposure():
         from xraycam import async
         self.dataruns = async.IterThread(RunSequence(*args, **kwargs))
 
@@ -402,10 +413,10 @@ class Frame:
         new.data[hot_indices] = 0
         return new
 
-    def _raw_lineout(self):
-        return np.sum(self.data, axis = 0) / self.photon_value
+    def _raw_lineout(self, xrange=(0,-1), yrange=(0,-1),**kwargs):
+        return np.sum(self.data[yrange[0]:yrange[1],xrange[0]:xrange[1]], axis = 0) / self.photon_value
 
-    def get_lineout(self, rebin = 1, smooth = 0, xmin = 0, xmax = -1):
+    def get_lineout(self, energy=(None,None) , rebin = 1, smooth = 0, **kwargs):
         """
         Return a smoothed and rebinned lineout of self.data.
 
@@ -413,6 +424,10 @@ class Frame:
         number of pixel columns per bin
 
         Returns: bin values, intensities
+
+        Optionally add energy scale with tuple energy=(known energy, known bin).
+        If known_bin is None, max value of lineout is set to known_energy.
+        Returns: energies, intensities
         """
         def apply_smooth(arr1d):
             from scipy.ndimage.filters import gaussian_filter as gf
@@ -423,14 +438,23 @@ class Frame:
         if (not isinstance(rebin, int)) or rebin < 1:
             raise ValueError("Rebin must be a positive integer")
 
-        return compose(apply_rebin, apply_smooth)(self._raw_lineout()[xmin: xmax])
+        lineout =  compose(apply_rebin, apply_smooth)(self._raw_lineout(**kwargs))
+
+        #Add energy scale to lineout
+        if energy != (None,None):
+            from xraycam.camalysis import add_energy_scale
+            lineout_x, lineout_y = lineout
+            lineout = add_energy_scale(lineout_y,energy[0],known_bin=energy[1],rebinparam=rebin,camerainvert=True,braggorder=1)
+
+        return lineout
+
+
 
     def plot_lineout(self, smooth = 0, error_bars = False, rebin = 1, label = '',
-            show = True, peaknormalize = False, xmin = 0, xmax = -1):
+            show = True, peaknormalize = False, **kwargs):
         if not label:
             label = self.name
-        return _plot_lineout(*self.get_lineout(rebin = rebin, smooth = smooth,
-                xmin = xmin, xmax = xmax),
+        return _plot_lineout(*self.get_lineout(rebin = rebin, smooth = smooth,**kwargs),
             show = show, error_bars = error_bars, label = label, peaknormalize = peaknormalize)
 
     def plot_histogram(self, show = True, calibrate = False, **kwargs):
@@ -451,3 +475,55 @@ class Frame:
         if elapsed is None:
             elapsed = self.time
         return np.sum(self._raw_lineout()[start:end]) / self.time
+
+class Monitor:
+    def __init__(self, *args, transpose = True, vmax = 150, rebin = 1, **kwargs):
+        self.run = DataRun(*args, **kwargs)
+        self.vmax = vmax
+        self.rebin = rebin
+
+    def frame(self):
+        return self.run.get_frame()
+    
+    def update(self):
+        self.run.show(vmax = self.vmax)
+        self.run.plot_lineout(rebin = self.rebin)
+        self.frame().plot_histogram(xmin = 0, xmax = self.vmax)
+        
+    def stop(self):
+        self.run.stop()
+
+def runlist(name,number,time=None,theta=None,z=None):
+    monitorinstance = Monitor(threshold = 2, window_min = 120, window_max = 132, photon_value = 126,
+            run_prefix = name+str(number), htime=time)
+    monitorinstance.run.theta=theta
+    monitorinstance.run.z=z
+    return monitorinstance
+
+def runlist_update(runlist,show=True,label='',**kwargs):
+    print([x.run.counts_per_second() for x in runlist])
+    print([x.run.acquisition_time() for x in runlist])
+    
+    plotdict=dict(energy=(None,None),yrange=[800,1600],rebin=3, peaknormalize=False)
+    for key, value in kwargs.items():
+        if key in plotdict:
+            plotdict[key]=value
+    
+    [x.run.plot_lineout(**plotdict,show=False) for x in runlist]
+                        #label=str(x.run.z)+'mm'+' - '+fwhm_ev(x.run.get_frame().get_lineout(**plotdict))+'eV') for x in runlist]
+    if show:
+        plt.show()
+
+def save_lineout_csv(datarun,filename,**kwargs):
+    try:
+        lineoutx, lineouty = datarun.get_frame().get_lineout(**kwargs)
+        acquisitiontime = datarun.acquisition_time()
+        countrate = datarun.counts_per_second()
+    except AttributeError:
+        lineoutx, lineouty = datarun.run.get_frame().get_lineout(**kwargs)
+        acquisitiontime = datarun.run.acquisition_time()
+        countrate = datarun.run.counts_per_second()
+    savedata = np.array([lineoutx,lineouty])
+    headerstr = 'Plot options: '+str(kwargs)+'\nCount rate: '+str(countrate)+'\nAcquisition time: '+str(acquisitiontime)+'\nEnergies(eV),Intensities'
+    np.savetxt(filename,savedata,delimiter=',',header=headerstr)
+    print('file saved as: ',filename)

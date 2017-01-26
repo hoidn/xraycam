@@ -1,4 +1,8 @@
-UW notebook server addresses: http://10.155.94.65:8888, http://10.155.94.252:8888
+UW notebook server addresses: 
+http://10.155.94.65:8888
+Will desktop - http://10.155.94.252:8888
+New Laptop - http://10.155.95.161:8888
+
 Beaglebone Black IP: 10.155.95.216
 
 xraycam installation:
