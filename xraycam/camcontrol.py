@@ -315,8 +315,9 @@ class RunSet:
         """
         TODO docstring
         """
+        self.dataruns = None
 
-    def from_multiple_exposure():
+    def from_multiple_exposure(self,*args,**kwargs):
         from xraycam import async
         self.dataruns = async.IterThread(RunSequence(*args, **kwargs))
 
@@ -330,6 +331,8 @@ class RunSet:
         """
         if datarun is None:
             datarun = DataRun(*args, **kwargs)
+        if self.dataruns is None:
+            self.dataruns = []
         self.dataruns.append(datarun)
 
     def get_dataruns(self):
