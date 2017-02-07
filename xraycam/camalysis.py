@@ -116,14 +116,18 @@ def cmplot(datarun, smooth=0,show=True):
     if show == True:
         camcontrol.plt.show()
 
-def fwhm_vs_row_plot(datarun,step=100):
-    camcontrol.plt.plot(*list(zip(*[(i+step/2,fwhm_datarun(datarun.run,2300,xrange=[i,i+step],rebin=2)) for i in range(0,2000,step)])),label='fwhm v row')
+def fwhm_vs_row_plot(datarun,step=100,**kwargs):
+    camcontrol.plt.plot(*list(zip(*[(i+step/2,fwhm_ev(datarun.get_frame().get_lineout(yrange=[i,i+step],**kwargs))) for i in range(0,2000,step)])),label='fwhm v row')
     camcontrol.plt.show()
+
+# def fwhm_vs_row_plot(datarun,step=100):
+#     camcontrol.plt.plot(*list(zip(*[(i+step/2,fwhm_datarun(datarun.run,2300,xrange=[i,i+step],rebin=2)) for i in range(0,2000,step)])),label='fwhm v row')
+#     camcontrol.plt.show()
     
-def focus_ThetavsFWHM_plot(dataruntuple,known_energy,**kwargs):
-    camcontrol.plt.plot(*list(zip(*[(x.run.theta,fwhm_datarun(x.run,known_energy,**kwargs)) for x in 
-                     dataruntuple])),label='fwhm v z')
-    camcontrol.plt.show()
+# def focus_ThetavsFWHM_plot(dataruntuple,known_energy,**kwargs):
+#     camcontrol.plt.plot(*list(zip(*[(x.run.theta,fwhm_datarun(x.run,known_energy,**kwargs)) for x in 
+#                      dataruntuple])),label='fwhm v z')
+#     camcontrol.plt.show()
 
 def cropping_tool(datarun,step,known_energy=2014,calcfwhm=True,**kwargs):
     [plot_with_energy_scale(datarun,known_energy,label='['+','.join((str(i),str(i+step)))+']',yrange=[i,i+step],
@@ -217,33 +221,33 @@ def get_peaks(lineout,interp=True,**kwargs):
     return np.array([peaks_x,peaks_y])
 
 def anglecounts(runlist):
-    thetalist = [x.run.theta for x in runlist]
-    countlist = [x.run.counts_per_second() for x in runlist]
+    thetalist = [x.theta for x in runlist]
+    countlist = [x.counts_per_second() for x in runlist]
     from xraycam.camcontrol import plt
     plt.plot(*[[thetalist[i] for i in np.argsort(thetalist)],[countlist[i] for i in np.argsort(thetalist)]], label='counts vs angle')
     plt.xlabel('theta (deg)')
     plt.ylabel('counts/sec')
     plt.show()
 
-def peaklocation_vs_theta(datarunlist,dosort=True,show=True,usetheta=True,useenergy=True,interp=True):
-    if usetheta:
-        thetalist = [x.run.theta for x in datarunlist]
-    else:
-        thetalist = np.arange(len(datarunlist))
-    if useenergy:
-        energy = (2307,400)
-    else:
-        energy = (None, None)
-    peaklist = [get_peaks(x.run.get_frame().get_lineout(energy=energy),interp=interp)[0,0] for x in datarunlist]
-    xylist = np.array([thetalist,peaklist])
-    if dosort:
-        xylist = xylist.T[np.argsort(thetalist)].T
-    plt.plot(*xylist,label='')
-    if usetheta:
-        plt.xlabel('theta (deg)')
-    else:
-        plt.xlabel('run order')
-    plt.ylabel('peaklocation (eV)')
-    if show:
-        plt.show()
-    return xylist
+# def peaklocation_vs_theta(datarunlist,dosort=True,show=True,usetheta=True,useenergy=True,interp=True):
+#     if usetheta:
+#         thetalist = [x.run.theta for x in datarunlist]
+#     else:
+#         thetalist = np.arange(len(datarunlist))
+#     if useenergy:
+#         energy = (2307,400)
+#     else:
+#         energy = (None, None)
+#     peaklist = [get_peaks(x.run.get_frame().get_lineout(energy=energy),interp=interp)[0,0] for x in datarunlist]
+#     xylist = np.array([thetalist,peaklist])
+#     if dosort:
+#         xylist = xylist.T[np.argsort(thetalist)].T
+#     plt.plot(*xylist,label='')
+#     if usetheta:
+#         plt.xlabel('theta (deg)')
+#     else:
+#         plt.xlabel('run order')
+#     plt.ylabel('peaklocation (eV)')
+#     if show:
+#         plt.show()
+#     return xylist

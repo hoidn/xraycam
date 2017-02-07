@@ -5,11 +5,16 @@ import plotly.graph_objs as go
 import numpy as np
 from xraycam.camcontrol import plt
 
-def norm(y):
-    return y/max(y)
+def norm(y,mode='peak'):
+    if mode=='peak':
+        res = y/max(y)
+    elif mode == 'integral':
+        res = y/np.sum(y)
+    return res
 
-def fit_resid_plotly(lmfitoutput,xvalues,xrange=None,poisson=False,comptraces=[],complabels=[],save=False):
-    data=[]       
+def fit_resid_plotly(lmfitoutput,xvalues,xrange=None,poisson=False,comptraces=[],complabels=[],save=False,joined=False):
+    data=[]
+
     if poisson:
         poissontrace1=go.Scatter(x=xvalues,y=np.sqrt(lmfitoutput.data),xaxis='x',yaxis='y',
                                  name='poisson+',mode='lines',fill='tozeroy',line=dict(
@@ -19,6 +24,7 @@ def fit_resid_plotly(lmfitoutput,xvalues,xrange=None,poisson=False,comptraces=[]
                                 color='rgba(31,120,180,.5)'),fillcolor='rgba(31,120,180,0.25)')
         data.append(poissontrace2)
         data.append(poissontrace1)
+
     if poisson == 2:
         poissontrace3=go.Scatter(x=xvalues,y=2*np.sqrt(lmfitoutput.data),xaxis='x',yaxis='y',
                                  name='poisson2+',mode='lines',fill='tonexty',line=dict(
@@ -34,8 +40,14 @@ def fit_resid_plotly(lmfitoutput,xvalues,xrange=None,poisson=False,comptraces=[]
                                 color='rgb(49,54,149)'))
     fittrace = go.Scatter(x=xvalues,y=lmfitoutput.best_fit,xaxis='x',yaxis='y2',name='fit',
                          line=dict(color='rgba(0,0,0,0.7)'))
-    datatrace = go.Scatter(x=xvalues,y=lmfitoutput.data,xaxis='x',yaxis='y2',name='data',mode='markers',
+
+    if joined:
+        datamode = 'lines+markers'
+    else:
+        datamode = 'markers'
+    datatrace = go.Scatter(x=xvalues,y=lmfitoutput.data,xaxis='x',yaxis='y2',name='data',mode=datamode,
                           marker = dict(size=5,color='rgba(200,0,0,0.8)'))
+
     for trace in[residtrace,datatrace,fittrace]:
         data.append(trace)
     
@@ -52,14 +64,16 @@ def fit_resid_plotly(lmfitoutput,xvalues,xrange=None,poisson=False,comptraces=[]
         yaxis=dict(domain=[0.7,1],title='residuals'),
         yaxis2=dict(domain=[0,0.68],title='intensity'),
         height=600)
+
     if poisson == 1:
         data=data[::-1]
+
     fig=go.Figure(data=data,layout=layout)
     if save:
         imagestr='svg'
     else:
         imagestr=None
-    offline.iplot(fig,image=imagestr)
+        offline.iplot(fig,image=imagestr)
 
 def splitting(lmfitout,v1str,v2str):
     v1center = lmfitout.best_values[v1str+'_center']
@@ -284,6 +298,145 @@ class do_four_peak_fit:
         savedata = np.array([self.lineoutx,self.lineouty,self.out.best_fit,self.complist[0][1],self.complist[1][1]])#,self.complist[2][1]])
         np.savetxt(filename,savedata,delimiter=',',header='xvalues,rawdata,fit,comp0,comp1,comp2')
         print('file saved as:',filename)
+
+def kalpha_doublet_model(mainpeakpos=2307.35,gamma=0.4475,sigma=0.1496,splitting=1.17,ratio=1/0.546,prefix1='a1_',prefix2='a2_'):
+    """Makes lmfit model of kalpha doublet shape.
+    
+    Model is composed of two voigts with fixed Lorentzian
+     and Gaussian widths and fixed splitting and peak ratios.
+    Default values are a fit to ZnS doublet shape.
+
+    Args:
+        mainpeakpos: Energy (eV) position of kalpha1 peak.
+        gamma: Lorentzian width (in voigt model).
+        sigma: Gaussian width (in voigt model).
+        splitting: Energy gap (eV) between ka1,ka2
+        ratio: Ratio of peak heights ka1/ka2
+
+    Returns:
+        lmfit model, lmfit pars
+
+    Raises:
+        Nothing.
+    """
+    mod = models.VoigtModel(prefix=prefix1)+models.VoigtModel(prefix=prefix2)
+    pars = mod.make_params()
+    parsdict = dict([[prefix2+'amplitude',{'expr': prefix1+'amplitude*'+str(1/ratio), 'value': 1/ratio, 'vary': False}],
+                     [prefix2+'gamma', {'expr': prefix1+'gamma', 'value': gamma, 'vary': False}],
+                     [prefix2+'center', {'expr': prefix1+'center-'+str(splitting), 'value': mainpeakpos-splitting, 'vary': False}],
+                     [prefix1+'sigma', {'expr': '', 'value': sigma, 'vary': False}],
+                     [prefix1+'gamma', {'expr': '', 'value': gamma, 'vary': False}],
+                     [prefix1+'center', {'expr': '', 'value': mainpeakpos, 'vary': True}],
+                     [prefix2+'sigma', {'expr': prefix1+'sigma', 'value': sigma, 'vary': False}]])
+    for k,v in parsdict.items():
+        pars[k].set(vary=v['vary'],expr=v['expr'])
+    for k,v in parsdict.items():
+        pars[k].value=v['value']
+    return mod, pars
+
+import collections
+examplerefpeakshapes=collections.OrderedDict([
+    ('zns',
+        collections.OrderedDict([('mainpeakpos',2307.35),('gamma',0.4475),('sigma',0.1496),('splitting',1.17),('ratio',1/0.546)])),
+    ('fepo4',
+        collections.OrderedDict([('mainpeakpos',2309.12),('gamma',0.4475),('sigma',0.1496),('splitting',1.17),('ratio',1/0.546)]))])
+
+class kalpha_linear_combination_fit:
+
+    def __init__(self,lineout,sample='sample',refpeakshapes=None,linbg=True):
+        self.sample=sample
+        self.lineoutx=lineout[0]
+        self.lineouty=lineout[1]
+        self.refpeakshapes = refpeakshapes
+        self.linbg = linbg
+        self.make_model()
+
+    def make_model(self):
+        self.modellist = []
+        self.parslist = []
+
+        for k,v in self.refpeakshapes.items():
+            kdm, kdmpars = kalpha_doublet_model(prefix1=k+'_1_',prefix2=k+'_2_',**v)
+            self.modellist.append(kdm)
+            self.parslist.append(kdmpars)
+        if self.linbg:
+            self.modellist.append(models.LinearModel(prefix='linbg_'))
+            self.parslist.append(self.modellist[-1].make_params())
+
+        self.model = self.modellist[0]
+        for mod in self.modellist[1:]:
+            self.model = self.model+mod
+        self.pars = self.parslist[0]
+        for par in self.parslist[1:]:
+            self.pars = self.pars+par
+
+        for k in self.pars:
+            if '1_amplitude' in k:
+                self.pars[k].set(value=max(self.lineouty))
+
+        if self.linbg:
+            self.pars['linbg_intercept'].set(value=-list(self.refpeakshapes.items())[0][1]['mainpeakpos'])
+
+    def do_fit(self,bgcomp=True):
+        self.out = self.model.fit(self.lineouty,self.pars,x=self.lineoutx)
+        self.complist = {}
+        components = self.out.eval_components()
+        for k in self.refpeakshapes:
+            self.complist[k]=[self.lineoutx,components[k+'_1_']+components[k+'_2_']]
+            #self.complist.append([self.lineoutx,components[k+'_1_']+components[k+'_2_']])
+
+        if bgcomp:
+            self.complist['linbg']=[self.lineoutx,components['linbg_']]
+            #self.complist.append([self.lineoutx,components['linbg_']])
+
+    def calc_contributions(self):
+        sumdict = {}
+        for k,v in self.complist.items():
+            if 'linbg' not in k:
+                sumdict[k]=np.sum(v[1])
+        tot = np.sum(list(sumdict.values()))
+        self.components={}
+        for k,v in sumdict.items():
+            self.components[k]=v/tot
+        for k,v in self.components.items():
+            print(k+': '+str(round(v*100,3))+'%')
+
+    def residuals_plot(self,poisson=True,save=False,**kwargs):
+        fit_resid_plotly(
+            self.out,xvalues=self.lineoutx,
+            comptraces=list(self.complist.values()),poisson=poisson,
+            save=save,complabels=list(self.complist.keys()),**kwargs)
+
+    def plot_summary(self):
+        plt.plot(self.lineoutx,self.lineouty,label='data')
+        plt.plot(self.lineoutx,self.model.eval(self.pars,x=self.lineoutx),label='initial')
+        try:
+            plt.plot(self.lineoutx,self.out.best_fit,label='fit')
+        except:
+            plt.show()
+        else:
+            plt.show()
+
+    def save_fit_csv(self,filename):
+        savelist = [self.lineoutx,self.lineouty,self.out.best_fit]
+        _ = [savelist.append(c[1]) for c in self.complist.values()]
+        savedata = np.array(savelist)
+        headerlist = ['Energy(eV)','Rawdata (counts)','Fit']
+        _ = [headerlist.append(k+'comp') for k in self.complist.keys()]
+        np.savetxt(filename,np.transpose(savedata),delimiter=',',header=','.join(headerlist))
+        print('file saved as:',filename)
+
+
+        # if self.linbg:
+        #     rindex = -1
+        # else:
+        #     rindex = None
+        # for c in self.complist[:rindex]:
+        #     tot=tot+np.sum(c[1])
+
+
+
+
 
 # Old version
 # class do_four_peak_fit:
