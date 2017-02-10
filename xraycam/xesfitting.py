@@ -55,7 +55,8 @@ def fit_resid_plotly(lmfitoutput,xvalues,xrange=None,poisson=False,comptraces=[]
         i=0
         if not complabels:
             complabels=['comp%d'% j for j in range(len(comptraces))]
-        for tr in reversed(comptraces):
+        #for tr in reversed(comptraces):
+        for tr in comptraces:
             data.append(go.Scatter(x=tr[0],y=tr[1],xaxis='x',yaxis='y2',name=complabels[i]))#,visible='legendonly'))
             i+=1
     
@@ -73,7 +74,7 @@ def fit_resid_plotly(lmfitoutput,xvalues,xrange=None,poisson=False,comptraces=[]
         imagestr='svg'
     else:
         imagestr=None
-        offline.iplot(fig,image=imagestr)
+    offline.iplot(fig,image=imagestr)
 
 def splitting(lmfitout,v1str,v2str):
     v1center = lmfitout.best_values[v1str+'_center']
@@ -336,10 +337,10 @@ def kalpha_doublet_model(mainpeakpos=2307.35,gamma=0.4475,sigma=0.1496,splitting
 
 import collections
 examplerefpeakshapes=collections.OrderedDict([
-    ('zns',
-        collections.OrderedDict([('mainpeakpos',2307.35),('gamma',0.4475),('sigma',0.1496),('splitting',1.17),('ratio',1/0.546)])),
-    ('fepo4',
-        collections.OrderedDict([('mainpeakpos',2309.12),('gamma',0.4475),('sigma',0.1496),('splitting',1.17),('ratio',1/0.546)]))])
+    ('reduced',
+        collections.OrderedDict([('mainpeakpos',2307.69),('gamma',0.4475),('sigma',0.1496),('splitting',1.17),('ratio',1/0.546)])),
+    ('oxidized',
+        collections.OrderedDict([('mainpeakpos',2309.15),('gamma',0.4475),('sigma',0.1496),('splitting',1.17),('ratio',1/0.546)]))])
 
 class kalpha_linear_combination_fit:
 
@@ -379,7 +380,7 @@ class kalpha_linear_combination_fit:
 
     def do_fit(self,bgcomp=True):
         self.out = self.model.fit(self.lineouty,self.pars,x=self.lineoutx)
-        self.complist = {}
+        self.complist = collections.OrderedDict()
         components = self.out.eval_components()
         for k in self.refpeakshapes:
             self.complist[k]=[self.lineoutx,components[k+'_1_']+components[k+'_2_']]
@@ -389,17 +390,22 @@ class kalpha_linear_combination_fit:
             self.complist['linbg']=[self.lineoutx,components['linbg_']]
             #self.complist.append([self.lineoutx,components['linbg_']])
 
-    def calc_contributions(self):
-        sumdict = {}
+    def calc_contributions(self,printenergy=False):
+        sumdict = collections.OrderedDict()
         for k,v in self.complist.items():
             if 'linbg' not in k:
                 sumdict[k]=np.sum(v[1])
         tot = np.sum(list(sumdict.values()))
-        self.components={}
+        self.components=collections.OrderedDict()
         for k,v in sumdict.items():
             self.components[k]=v/tot
+        print('for sample '+self.sample)
         for k,v in self.components.items():
             print(k+': '+str(round(v*100,3))+'%')
+        if printenergy:
+            for k,v in self.out.best_values.items():
+                if '1_center' in k:
+                    print(k,' at ','{:6.2f}'.format(v))
 
     def residuals_plot(self,poisson=True,save=False,**kwargs):
         fit_resid_plotly(
@@ -425,6 +431,49 @@ class kalpha_linear_combination_fit:
         _ = [headerlist.append(k+'comp') for k in self.complist.keys()]
         np.savetxt(filename,np.transpose(savedata),delimiter=',',header=','.join(headerlist))
         print('file saved as:',filename)
+
+    def pretty_plot_fit(self,xrange=None,save=False,joined=False):
+        data=[]
+
+        fittrace = go.Scatter(x=self.lineoutx,y=self.out.best_fit,xaxis='x',yaxis='y',name='fit',
+                             line=dict(color='rgba(0,0,0,0.7)'))
+
+        if joined:
+            datamode = 'lines+markers'
+        else:
+            datamode = 'markers'
+        datatrace = go.Scatter(x=self.lineoutx,y=self.lineouty,xaxis='x',yaxis='y',name='data',mode=datamode,
+                              marker = dict(size=5,color='rgba(200,0,0,0.8)'))
+
+        for trace in[datatrace,fittrace]:
+            data.append(trace)
+        
+        #colorlist = [
+    #     [0, 'rgb(150,0,90)'], [0.125, 'rgb(0,0,200)'],
+    #     [0.25, 'rgb(0,25,255)'], [0.375, 'rgb(0,152,255)'],
+    #     [0.5, 'rgb(44,255,150)'], [0.625, 'rgb(151,255,0)'],
+    #     [0.75, 'rgb(255,234,0)'], [0.875, 'rgb(255,111,0)'],
+    #     [1, 'rgb(255,0,0)']
+    # ]
+        complabels = list(self.complist.keys())
+        i=0
+        for tr in self.complist.values():
+            #data.append(go.Scatter(x=tr[0],y=tr[1],xaxis='x',yaxis='y',name=complabels[i],line=dict(color=colorlist[i][1])))#,visible='legendonly'))
+            data.append(go.Scatter(x=tr[0],y=tr[1],xaxis='x',yaxis='y',name=complabels[i]))#,visible='legendonly'))
+            i+=1
+        
+        layout=go.Layout(
+            xaxis=dict(domain=[0,1],anchor='y',title='Energy(ev)',range=xrange),
+            yaxis=dict(domain=[0,1],title='intensity'),
+            height=600)
+
+        data = data[::-1]
+        fig=go.Figure(data=data,layout=layout)
+        if save:
+            imagestr='svg'
+        else:
+            imagestr=None
+        offline.iplot(fig,image=imagestr)
 
 
         # if self.linbg:
