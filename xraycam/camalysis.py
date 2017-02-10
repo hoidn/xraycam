@@ -58,7 +58,8 @@ def add_energy_scale(lineout,known_energy,known_bin=None,rebinparam=1,camerainve
         centerindex=np.argmax(gfilt(lineout,3)) # if known_bin not provided, set energy to max of lineout
         # note to self, I was worried that gfilt might change the length of the list, but it doesn't.
     else:
-        centerindex=round(known_bin/rebinparam) # else set energy to be at known bin position
+        #centerindex=round(known_bin/rebinparam) # else set energy to be at known bin position
+        centerindex=known_bin/rebinparam #try without rounding 2.9.17
     indexfromcenter=np.array(range(len(lineout)))-centerindex
     if camerainvert == True:
             indexfromcenter=-indexfromcenter # if camera gets flipped upside down, just reverse the indices
