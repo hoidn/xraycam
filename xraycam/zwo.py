@@ -197,4 +197,4 @@ launch_process(sink_process)
 # Launch OAcapture
 # TODO: This process shouldn't persist when the parent dies.
 # set daemon attribute to True so that child processes die with the parent
-os.system('oacapture &> /dev/null &')
+#os.system('oacapture &> /dev/null &')

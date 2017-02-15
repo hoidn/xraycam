@@ -131,9 +131,12 @@ def _get_poisson_uncertainties(intensities):
     return np.sqrt(np.array(intensities))
 
 def _plot_lineout(pixeli, intensity, show = False, label = '', error_bars = False,
-        peaknormalize = False):
-    if peaknormalize:
+        peaknormalize = False, normalize=False):
+    #keep peaknormalize for now for backwards compabitility
+    if peaknormalize==True or normalize=='peak':
         norm = np.max(intensity)
+    elif normalize == 'integral':
+        norm = np.sum(intensity)
     else:
         norm = 1.
     if error_bars:
@@ -260,7 +263,7 @@ class RunSequence:
     finish before beginning the next.
     """
     def __init__(self, prefix = None, number_runs = 0, run_prefix = None,
-            htime = None, **kwargs):
+            htime = None, dashinfilename=True, **kwargs):
         """
         prefix : str
             Datarun prefix prefix.
@@ -272,7 +275,10 @@ class RunSequence:
         if prefix is None:
             prefixes = [str(time.time()) for _ in range(number_runs)]
         else:
-            prefixes = [prefix + '_%d' % i for i in range(number_runs)]
+            if dashinfilename:
+                prefixes = [prefix + '_%d' % i for i in range(number_runs)] #quick fix for filename problems..
+            else:
+                prefixes = [prefix + '%d' % i for i in range(number_runs)]
         self.funcalls = [lambda prefix=prefix: DataRun(run_prefix = prefix, htime = htime, **kwargs)
             for prefix in prefixes]
         self.current = None
@@ -315,8 +321,9 @@ class RunSet:
         """
         TODO docstring
         """
+        self.dataruns = None
 
-    def from_multiple_exposure():
+    def from_multiple_exposure(self,*args,**kwargs):
         from xraycam import async
         self.dataruns = async.IterThread(RunSequence(*args, **kwargs))
 
@@ -330,6 +337,8 @@ class RunSet:
         """
         if datarun is None:
             datarun = DataRun(*args, **kwargs)
+        if self.dataruns is None:
+            self.dataruns = []
         self.dataruns.append(datarun)
 
     def get_dataruns(self):
@@ -451,11 +460,11 @@ class Frame:
 
 
     def plot_lineout(self, smooth = 0, error_bars = False, rebin = 1, label = '',
-            show = True, peaknormalize = False, **kwargs):
+            show = True, peaknormalize = False, normalize=False, **kwargs):
         if not label:
             label = self.name
         return _plot_lineout(*self.get_lineout(rebin = rebin, smooth = smooth,**kwargs),
-            show = show, error_bars = error_bars, label = label, peaknormalize = peaknormalize)
+            show = show, error_bars = error_bars, label = label, peaknormalize = peaknormalize, normalize=normalize)
 
     def plot_histogram(self, show = True, calibrate = False, **kwargs):
         """
