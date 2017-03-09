@@ -50,13 +50,15 @@ def energy_from_x_position(bragg,xpx,rebinparam=1,braggorder=1):
     xpos=xpx*pizel_size*rebinparam
     return braggorder*1000*1.97705*np.sqrt(1+(xpos*np.cos(np.pi*bragg/90)+50*np.sin(np.pi*bragg/90))**2/(50-50*np.cos(np.pi*bragg/90)+xpos*np.sin(np.pi*bragg/90))**2)
 
-def add_energy_scale(lineout,known_energy,known_bin=None,rebinparam=1,camerainvert=True,braggorder=1,**kwargs):
+def add_energy_scale(lineout,known_energy,known_bin='peak',rebinparam=1,camerainvert=True,braggorder=1,**kwargs):
     """
     Returns an np array of [energies,lineout], by either applying a known energy to the max of the dataset, or to a specified bin.
     """
     if known_bin == None:
         centerindex=np.argmax(gfilt(lineout,3)) # if known_bin not provided, set energy to max of lineout
         # note to self, I was worried that gfilt might change the length of the list, but it doesn't.
+    elif known_bin == 'peak':
+        centerindex = get_peaks(np.array([list(range(len(lineout))),lineout]))[0]
     else:
         #centerindex=round(known_bin/rebinparam) # else set energy to be at known bin position
         centerindex=known_bin/rebinparam #try without rounding 2.9.17
@@ -75,27 +77,27 @@ def fwhm_ev(arr2d,fwhm_smooth=2):
     r1, r2 = spline.roots()
     return format(r2 - r1, '.3f')
 
-def plot_with_energy_scale(datarun,known_energy,yrange=[0,-1],xrange=[0,-1],rebin=1,show=True,peaknormalize=False, label=None,calcfwhm=False,parabolic=False,**kwargs):
-    if parabolic == False:
-        lineout = np.sum(_reorient_array(datarun.get_array())[yrange[0]:yrange[1],xrange[0]:xrange[1]],axis=0)/datarun.photon_value
-    else:
-        lineout = get_parabolic_lineout(_reorient_array(datarun.get_array()),yrange=yrange)[xrange[0]:xrange[1]] 
-    if rebin != 1: #rebin using oliver's rebin_spectrum function
-        lineout = _rebin_spectrum(np.array(range(len(lineout))),lineout,rebin)[1]
-    if peaknormalize:
-        lineout = lineout / max(lineout)
-    lineout_energyscale=add_energy_scale(lineout,known_energy,rebinparam=rebin,**kwargs)
-    if label == None and calcfwhm == False:
-        label=datarun.prefix
-    elif label == None and calcfwhm == True:
-        s=' - '
-        label=s.join((str(datarun.prefix),str(fwhm_ev(lineout_energyscale,3))))
-    elif label != None and calcfwhm == True:
-        s=' - '
-        label=s.join((label,str(fwhm_ev(lineout_energyscale))))
-    camcontrol.plt.plot(*lineout_energyscale,label=label)
-    if show == True:
-        camcontrol.plt.show()
+# def plot_with_energy_scale(datarun,known_energy,yrange=[0,-1],xrange=[0,-1],rebin=1,show=True,peaknormalize=False, label=None,calcfwhm=False,parabolic=False,**kwargs):
+#     if parabolic == False:
+#         lineout = np.sum(_reorient_array(datarun.get_array())[yrange[0]:yrange[1],xrange[0]:xrange[1]],axis=0)/datarun.photon_value
+#     else:
+#         lineout = get_parabolic_lineout(_reorient_array(datarun.get_array()),yrange=yrange)[xrange[0]:xrange[1]] 
+#     if rebin != 1: #rebin using oliver's rebin_spectrum function
+#         lineout = _rebin_spectrum(np.array(range(len(lineout))),lineout,rebin)[1]
+#     if peaknormalize:
+#         lineout = lineout / max(lineout)
+#     lineout_energyscale=add_energy_scale(lineout,known_energy,rebinparam=rebin,**kwargs)
+#     if label == None and calcfwhm == False:
+#         label=datarun.prefix
+#     elif label == None and calcfwhm == True:
+#         s=' - '
+#         label=s.join((str(datarun.prefix),str(fwhm_ev(lineout_energyscale,3))))
+#     elif label != None and calcfwhm == True:
+#         s=' - '
+#         label=s.join((label,str(fwhm_ev(lineout_energyscale))))
+#     camcontrol.plt.plot(*lineout_energyscale,label=label)
+#     if show == True:
+#         camcontrol.plt.show()
 
 def focus_ZvsFWHM_plot(dataruntuple,known_energy,**kwargs):
     camcontrol.plt.plot(*list(zip(*[(x.run.z,fwhm_datarun(x.run,known_energy,**kwargs)) for x in dataruntuple])),label='fwhm v z')
@@ -201,7 +203,7 @@ def get_peaks(lineout,interp=True,**kwargs):
     import peakutils
     
     #Get thres and min_dist for peak-detection, set default if not provided
-    thres = kwargs.get('thres',0.75)
+    thres = kwargs.get('thres',0.8)
     min_dist = kwargs.get('min_dist',30)
     width = kwargs.get('width',10)
     

@@ -119,7 +119,7 @@ def _rebin_spectrum(x, y, rebin = 5):
         def key(dummy):
             xindx = i.__next__()
             return int(xindx/rebin)
-        return [op(list(values)) for groupnum, values in itertools.groupby(arr1d, key = key)][:-1]
+        return [op(list(values)) for groupnum, values in itertools.groupby(arr1d, key = key)][:-1]#is this -1 redundant? this shortens array from 1096->1095
     return group(x, np.mean), group(y, np.sum)
 
 def _get_poisson_uncertainties(intensities):
@@ -133,11 +133,20 @@ def _get_poisson_uncertainties(intensities):
 def _plot_lineout(pixeli, intensity, show = False, label = '', error_bars = False,
         peaknormalize = False, normalize=False):
     #keep peaknormalize for now for backwards compabitility
-    if peaknormalize==True or normalize=='peak':
-        norm = np.max(intensity)
-    elif normalize == 'integral':
-        norm = np.sum(intensity)
-    else:
+    # try:
+    #     if not normalize[1]:
+    #         lineouty = lineouty/np.sum(lineouty[normalize[1][0],normalize[1][1]])
+    # except IndexError:
+    try:
+        if peaknormalize==True or normalize=='peak':
+            norm = np.max(intensity)
+        elif normalize[0] == 'integral':
+            norm = np.sum(intensity[normalize[1][0]:normalize[1][1]])
+        elif normalize == 'integral':
+            norm = np.sum(intensity)
+        else:
+            norm = 1.
+    except TypeError:
         norm = 1.
     if error_bars:
         if not (config.plotting_mode == 'notebook'):
@@ -233,6 +242,12 @@ class DataRun:
         else:
             values = pixels
         _plot_histogram(values, show = show, calibrate = calibrate, **kwargs)
+
+    def get_lineout(self,**kwargs):
+        """
+        kwargs are passed to self.frame.get_lineout
+        """
+        return self.get_frame().get_lineout(**kwargs)
 
     def plot_lineout(self, **kwargs):
         """
@@ -368,6 +383,35 @@ class RunSet:
             return frame.filter(**kwargs)
         return reduce(operator.add, list(map(framefilter, frames)))
 
+    def get_total(self, normalize=False,energy=(None,None),**kwargs):
+        # lineoutx = self.dataruns[0].get_frame().get_lineout(energy=(None,None),**kwargs)[0]
+        lineouty = np.sum([x.get_frame().get_lineout(energy=(None,None),**kwargs)[1] for x in self.dataruns],axis=0)#hardcoded (none,none) to energy arg here
+        # try:
+        #     if not normalize[1]:
+        #         lineouty = lineouty/np.sum(lineouty[normalize[1][0],normalize[1][1]])
+        # except IndexError:
+        try:
+            if normalize == 'peak':
+                lineouty = lineouty/max(lineouty)
+            elif normalize[0] == 'integral':
+                norm = np.sum(intensity[normalize[1][0]:normalize[1][1]])
+            elif normalize == 'integral':
+                lineouty = lineouty/np.sum(lineouty)
+        except TypeError:
+            pass
+        lineoutx = np.arange(len(lineouty))
+        lineout = np.array([lineoutx,lineouty])
+        if energy != (None,None):
+            from xraycam.camalysis import add_energy_scale
+            lineout = add_energy_scale(lineouty,energy[0],known_bin=energy[1],rebinparam=kwargs.get('rebin',1),camerainvert=True,braggorder=1)
+        return np.array(lineout)
+
+    def plot_total_lineout(self, normalize=False,show=True,label=None,**kwargs):
+        lineout = self.get_total(normalize=normalize,**kwargs)
+        _plot_lineout(*lineout,show=show,label=label)
+        return lineout
+
+
 class Frame:
     def __init__(self, array = None, time = 0., name = '', photon_value = 45.,
             rotate = False):
@@ -422,7 +466,8 @@ class Frame:
         new.data[hot_indices] = 0
         return new
 
-    def _raw_lineout(self, xrange=(0,-1), yrange=(0,-1),**kwargs):
+#note to self 3/6/17: changed the xrange and yrange below to None so that we don't lost the edge of the frame
+    def _raw_lineout(self, xrange=(None,None), yrange=(None,None),**kwargs):
         return np.sum(self.data[yrange[0]:yrange[1],xrange[0]:xrange[1]], axis = 0) / self.photon_value
 
     def get_lineout(self, energy=(None,None) , rebin = 1, smooth = 0, **kwargs):
@@ -455,7 +500,7 @@ class Frame:
             lineout_x, lineout_y = lineout
             lineout = add_energy_scale(lineout_y,energy[0],known_bin=energy[1],rebinparam=rebin,camerainvert=True,braggorder=1)
 
-        return lineout
+        return np.array(lineout)
 
 
 
@@ -485,22 +530,22 @@ class Frame:
             elapsed = self.time
         return np.sum(self._raw_lineout()[start:end]) / self.time
 
-class Monitor:
-    def __init__(self, *args, transpose = True, vmax = 150, rebin = 1, **kwargs):
-        self.run = DataRun(*args, **kwargs)
-        self.vmax = vmax
-        self.rebin = rebin
+# class Monitor:
+#     def __init__(self, *args, transpose = True, vmax = 150, rebin = 1, **kwargs):
+#         self.run = DataRun(*args, **kwargs)
+#         self.vmax = vmax
+#         self.rebin = rebin
 
-    def frame(self):
-        return self.run.get_frame()
+#     def frame(self):
+#         return self.run.get_frame()
     
-    def update(self):
-        self.run.show(vmax = self.vmax)
-        self.run.plot_lineout(rebin = self.rebin)
-        self.frame().plot_histogram(xmin = 0, xmax = self.vmax)
+#     def update(self):
+#         self.run.show(vmax = self.vmax)
+#         self.run.plot_lineout(rebin = self.rebin)
+#         self.frame().plot_histogram(xmin = 0, xmax = self.vmax)
         
-    def stop(self):
-        self.run.stop()
+#     def stop(self):
+#         self.run.stop()
 
 def runlist(name,number,time=None,theta=None,z=None):
     monitorinstance = Monitor(threshold = 2, window_min = 120, window_max = 132, photon_value = 126,
@@ -523,16 +568,18 @@ def runlist_update(runlist,show=True,label='',**kwargs):
     if show:
         plt.show()
 
-def save_lineout_csv(datarun,filename,**kwargs):
+def save_lineout_csv(datarun,filename,tosharedfolder=False,**kwargs):
     try:
         lineoutx, lineouty = datarun.get_frame().get_lineout(**kwargs)
         acquisitiontime = datarun.acquisition_time()
         countrate = datarun.counts_per_second()
     except AttributeError:
-        lineoutx, lineouty = datarun.run.get_frame().get_lineout(**kwargs)
-        acquisitiontime = datarun.run.acquisition_time()
-        countrate = datarun.run.counts_per_second()
+        lineoutx, lineouty = datarun
+        acquisitiontime = 'unspecified'
+        countrate = 'unspecified'
     savedata = np.array([lineoutx,lineouty])
     headerstr = 'Plot options: '+str(kwargs)+'\nCount rate: '+str(countrate)+'\nAcquisition time: '+str(acquisitiontime)+'\nEnergies(eV),Intensities'
+    if tosharedfolder:
+        filename = '/media/sf_VBoxShare/'+filename
     np.savetxt(filename,savedata,delimiter=',',header=headerstr)
     print('file saved as: ',filename)
