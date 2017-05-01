@@ -337,6 +337,9 @@ class RunSet:
         TODO docstring
         """
         self.dataruns = None
+        self.totallineout = np.array([])
+        self.totallineoutdict = {}
+        self.totaldata = None
 
     def from_multiple_exposure(self,*args,**kwargs):
         from xraycam import async
@@ -384,32 +387,48 @@ class RunSet:
         return reduce(operator.add, list(map(framefilter, frames)))
 
     def get_total(self, normalize=False,energy=(None,None),**kwargs):
-        # lineoutx = self.dataruns[0].get_frame().get_lineout(energy=(None,None),**kwargs)[0]
-        lineouty = np.sum([x.get_frame().get_lineout(energy=(None,None),**kwargs)[1] for x in self.dataruns],axis=0)#hardcoded (none,none) to energy arg here
-        # try:
-        #     if not normalize[1]:
-        #         lineouty = lineouty/np.sum(lineouty[normalize[1][0],normalize[1][1]])
-        # except IndexError:
-        try:
-            if normalize == 'peak':
-                lineouty = lineouty/max(lineouty)
-            elif normalize[0] == 'integral':
-                norm = np.sum(intensity[normalize[1][0]:normalize[1][1]])
-            elif normalize == 'integral':
-                lineouty = lineouty/np.sum(lineouty)
-        except TypeError:
-            pass
-        lineoutx = np.arange(len(lineouty))
-        lineout = np.array([lineoutx,lineouty])
-        if energy != (None,None):
-            from xraycam.camalysis import add_energy_scale
-            lineout = add_energy_scale(lineouty,energy[0],known_bin=energy[1],rebinparam=kwargs.get('rebin',1),camerainvert=True,braggorder=1)
+        fdict={}
+        fdict['normalize']=normalize
+        fdict['energy']=energy
+        for key,val in kwargs.items():
+            fdict[key]=val
+
+        if not self.totallineout.any() or fdict != self.totallineoutdict:
+            # lineoutx = self.dataruns[0].get_frame().get_lineout(energy=(None,None),**kwargs)[0]
+            lineouty = np.sum([x.get_frame().get_lineout(energy=(None,None),**kwargs)[1] for x in self.dataruns],axis=0)#hardcoded (none,none) to energy arg here
+            # try:
+            #     if not normalize[1]:
+            #         lineouty = lineouty/np.sum(lineouty[normalize[1][0],normalize[1][1]])
+            # except IndexError:
+            try:
+                if normalize == 'peak':
+                    lineouty = lineouty/max(lineouty)
+                elif normalize[0] == 'integral':
+                    norm = np.sum(intensity[normalize[1][0]:normalize[1][1]])
+                elif normalize == 'integral':
+                    lineouty = lineouty/np.sum(lineouty)
+            except TypeError:
+                pass
+            lineoutx = np.arange(len(lineouty))
+            lineout = np.array([lineoutx,lineouty])
+            if energy != (None,None):
+                from xraycam.camalysis import add_energy_scale
+                lineout = np.array(add_energy_scale(lineouty,energy[0],known_bin=energy[1],rebinparam=kwargs.get('rebin',1),camerainvert=True,braggorder=1))
+            self.totallineout = lineout
+            self.totallineoutdict = fdict
+
+        else:
+            lineout = self.totallineout
+
         return np.array(lineout)
 
     def plot_total_lineout(self, normalize=False,show=True,label=None,**kwargs):
         lineout = self.get_total(normalize=normalize,**kwargs)
         _plot_lineout(*lineout,show=show,label=label)
         return lineout
+
+    def get_total_frame(self):
+        return np.sum([x.get_frame().data for x in self.dataruns],axis=0)
 
 
 class Frame:

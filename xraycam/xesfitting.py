@@ -81,12 +81,15 @@ def splitting(lmfitout,v1str,v2str):
     v2center = lmfitout.best_values[v2str+'_center']
     return v2center-v1center
 
-pkalpha2peakfitprofile = dict(v1_gamma=0.3,v1_center=2013,
-    v2_center=2013.8,bg_intercept=-2013)
+pkalpha2peakfitprofile = dict(v1_gamma=0.3,v1_center=2012.7,
+    v2_center=2013.5,bg_intercept=-2013)
+
+skalpha2peakfitprofile = dict(v1_gamma=0.3,v1_center=2306.9,
+    v2_center=2307.7,bg_intercept=-2307)
 
 class do_peak_fit:
     
-    def __init__(self,lineout, numpeaks=2,sample='sample',initialprofile=pkalpha2peakfitprofile):
+    def __init__(self,lineout, numpeaks=2,sample='sample',initialprofile=pkalpha2peakfitprofile,runoninit=True):
         self.sample=sample
         self.lineoutx=lineout[0]
         self.lineouty=lineout[1]
@@ -106,6 +109,9 @@ class do_peak_fit:
         self.initialprofile=initialprofile
         self.initialize_pars()
         self.complist=[]
+        if runoninit:
+            self.run_fit()
+            self.print_summary()
     
     def reset_pars(self):
         self.pars=self.voigt1.make_params()
@@ -141,21 +147,28 @@ class do_peak_fit:
         else:
             plt.show()
 
-    def plot_fit(self, mode=u'markers', show=True, peaknormalize=True, data=True):
+    def plot_fit(self, mode=u'markers', show=True, normalize='integral', data=True):
         lineouty=self.lineouty
-        if peaknormalize:
-            lineouty=norm(lineouty)
+        if normalize=='integral':
+            lineouty=norm(lineouty,mode=normalize)
+        elif normalize == 'peak':
+            lineouty=norm(lineouty,mode=normalize)
+
+        fitlabel = self.sample+' fit'
         if data:
             plt.plot(self.lineoutx,lineouty,label=self.sample+' data',mode=mode)
             fitcolor = 'rgba(0,0,0,0.7)'
-            fitlabel = None
+            # fitlabel = None
         else:
             fitcolor = None
-            fitlabel = self.sample+' fit'
+            # fitlabel = self.sample+' fit' // this line and line above commented out on 3.9, delete later if unneeded
+
         try:
             bestfit = self.out.best_fit
-            if peaknormalize:
-                bestfit = bestfit/max(self.lineouty)
+            if normalize=='integral':
+                bestfit = bestfit/np.sum(self.lineouty)
+            elif normalize=='peak':
+                bestfit = bestfit/np.max(self.lineouty)
             plt.plot(self.lineoutx,bestfit,label=fitlabel,color=fitcolor)
         except:
             if show:
@@ -171,7 +184,22 @@ class do_peak_fit:
         split = self.out.best_values['v2_center']-self.out.best_values['v1_center']
         print('Ka1/Ka2 spin-split is : ',split)
 
-pkalpha4peakfitprofile = dict(v1_gamma=0.3,v1_center=2013,v2_center=2013.8,
+    def print_summary(self,verbose=False):
+        fitbestvalues = self.out.best_values
+        if verbose:
+            for p in ('v1_center','v2_center','v1_gamma','v2_gamma','v1_sigma','v2_sigma'):
+                print(p+':\t'+str(fitbestvalues[p]))
+        split = fitbestvalues['v2_center']-fitbestvalues['v1_center']
+        ratio = fitbestvalues['v2_amplitude']/fitbestvalues['v1_amplitude']
+        print('for sample: '+self.sample)
+        print('\tsplitting:\t'+'{: 10.3f}'.format(split))
+        print('\tratio:\t\t'+'{: 10.3f}'.format(ratio))
+        print('\tka1:\t\t'+'{: 10.3f}'.format(fitbestvalues['v2_center']))
+        print('\tgamma1:\t\t'+'{: 10.3f}'.format(fitbestvalues['v2_gamma']))
+        print('\tsigma1:\t\t'+'{: 10.3f}'.format(fitbestvalues['v2_sigma']))
+        print('\tredchi:\t\t'+'{: 10.3f}'.format(self.out.redchi))
+
+pkalpha4peakfitprofile = dict(v1_gamma=0.3,v1_center=2013.5-0.8,v2_center=2013.5,
     v3_center=2014.5-0.8,v4_center=2014.5,bg_intercept=-2014)
         
 class do_four_peak_fit:
@@ -344,13 +372,15 @@ examplerefpeakshapes=collections.OrderedDict([
 
 class kalpha_linear_combination_fit:
 
-    def __init__(self,lineout,sample='sample',refpeakshapes=None,linbg=True):
+    def __init__(self,lineout,sample='sample',refpeakshapes=None,linbg=True,runoninit=False):
         self.sample=sample
         self.lineoutx=lineout[0]
         self.lineouty=lineout[1]
         self.refpeakshapes = refpeakshapes
         self.linbg = linbg
         self.make_model()
+        if runoninit:
+            self.do_fit()
 
     def make_model(self):
         self.modellist = []
@@ -396,9 +426,11 @@ class kalpha_linear_combination_fit:
             if 'linbg' not in k:
                 sumdict[k]=np.sum(v[1])
         tot = np.sum(list(sumdict.values()))
+
         self.components=collections.OrderedDict()
         for k,v in sumdict.items():
             self.components[k]=v/tot
+
         print('for sample '+self.sample)
         for k,v in self.components.items():
             print(k+': '+str(round(v*100,3))+'%')
@@ -431,6 +463,7 @@ class kalpha_linear_combination_fit:
         _ = [headerlist.append(k+'comp') for k in self.complist.keys()]
         np.savetxt(filename,np.transpose(savedata),delimiter=',',header=','.join(headerlist))
         print('file saved as:',filename)
+
 
     def pretty_plot_fit(self,xrange=None,save=False,joined=False):
         data=[]

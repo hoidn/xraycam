@@ -109,7 +109,7 @@ def center_of_masses(arr2d):
     return np.array(list(map(_cm, arr2d)))
 
 def cmplot(datarun, smooth=0,show=True):
-    arr2d = np.rot90(datarun.run.get_array()) # trying rot90 instead of transpose
+    arr2d = np.rot90(datarun.get_array()) # trying rot90 instead of transpose
 
     y = center_of_masses(arr2d)
     x = np.arange(len(y))
@@ -118,6 +118,8 @@ def cmplot(datarun, smooth=0,show=True):
     camcontrol.plt.plot(x, y, label = 'CM lineout')
     if show == True:
         camcontrol.plt.show()
+
+    return np.array([x,y])
 
 def fwhm_vs_row_plot(datarun,step=100,**kwargs):
     camcontrol.plt.plot(*list(zip(*[(i+step/2,fwhm_ev(datarun.get_frame().get_lineout(yrange=[i,i+step],**kwargs))) for i in range(0,2000,step)])),label='fwhm v row')
