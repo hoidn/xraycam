@@ -19,7 +19,7 @@ python setup.py install --user
 (modified) oaCapture installation:
 
 1. cd oacapture
-2. sudo ./install.sh
+2. ./install.sh
 
 (Added 4/7/17) ArcusMotors installation:
 The arcusmotors github repository also needs to be installed for motor control.
