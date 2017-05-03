@@ -12,6 +12,7 @@ from functools import reduce
 
 from . import utils
 from . import config
+from . import zwo
 
 if config.plotting_mode != 'minigui':
     if config.plotting_mode == 'notebook':

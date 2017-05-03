@@ -18,9 +18,10 @@ class angle_scan:
         self.actionlist = []
         for angle in self.anglelist:
             datarunfunc = lambda: camcontrol.DataRun(
-                prefix=self.prefix+'_%d'%angle, runparam={'angle':angle},**self.kwargs)
-            movefunc = ardstep.go_to_degree(angle)
-            self.actionlist.append[[datarunfunc,movefunc]]
+                run_prefix=self.prefix+'_%d'%angle, htime=self.duration,
+                runparam={'angle':angle},**self.kwargs)
+            movefunc = lambda: ardstep.go_to_degree(angle)
+            self.actionlist.append([movefunc,datarunfunc])
 
     def run_scan(self):
         from xraycam import async
@@ -60,12 +61,12 @@ class ActionSequence:
                     break
 
     def __next__(self):
+        self._wait_current_complete()
         try:
             action, datarun = self.actionlist.pop(0)
+            action()
             run = datarun()
             self.current = run
         except IndexError:
             raise StopIteration
-        self._wait_current_complete()
-        action()
         return run
