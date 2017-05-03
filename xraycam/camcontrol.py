@@ -4,25 +4,14 @@ import pkg_resources
 import copy
 import pdb
 import operator
-#import _thread
 import logging
 import os
 import time
 
 from functools import reduce
 
-#BEGIN:below lines for interfacing with flask
-# import sys
-# sys.path.append(os.path.expanduser('~/xraycam/xraycam'))
-# import utils.utils
-# import config
-#END
-
 from . import utils
 from . import config
-
-# TODO: move this setting from config.py to detconfig.py
-
 
 if config.plotting_mode != 'minigui':
     if config.plotting_mode == 'notebook':
@@ -186,21 +175,19 @@ def _plot_histogram(values, show = True, xmin = None, xmax = None,
 
 # TODO: reimplement inheritance
 class DataRun:
-    def __init__(self, run_prefix = '', rotate = False, photon_value = 45., *args, **kwargs):
+    def __init__(self, run_prefix = '', rotate = False, photon_value = 45.,runparam = {}, *args, **kwargs):
         self.rotate = rotate
         self.photon_value = photon_value
-        if detconfig.detector == 'zwo':
-            from . import zwo
-            self.base = zwo.ZRun(run_prefix = run_prefix, *args, **kwargs)
-            #self.stop = base.stop
-        elif detconfig.detector == 'beaglebone':
-            from . import bbb
-            self.base = bbb.DataRun(run_prefix = run_prefix, *args, **kwargs)
-            self.check_complete = self.base.check_complete
-        else:
-            raise ValueError
-        self.name = run_prefix
 
+        self.runparam = runparam
+        for k in ('threshold','htime','window_min','window_max'):
+            if k in kwargs:
+                runparam[k]=kwargs[k]
+        runparam['photon_value']=self.photon_value
+
+        from . import zwo
+        self.base = zwo.ZRun(run_prefix = run_prefix, runparam = self.runparam,*args, **kwargs)
+        self.name = run_prefix
 
     def acquisition_time(self):
         return self.base.acquisition_time()
@@ -261,16 +248,6 @@ class DataRun:
     def counts_per_second(self, **kwargs):
         return self.get_frame().counts_per_second(elapsed = self.acquisition_time(), **kwargs)
 
-
-#loc = locals()
-def set_detector(detid):
-    if detid == 'beaglebone' or detid == 'zwo':
-        detconfig.detector = detid
-        if detid == 'zwo':
-            # Module import causes oaCapture to launch
-            from . import zwo
-    else:
-        raise ValueError("detector identifier: must be 'beaglebone' or 'zwo'")
 
 class RunSequence:
     """

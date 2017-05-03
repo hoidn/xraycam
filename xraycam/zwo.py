@@ -95,10 +95,10 @@ class ZRun:
     """
     TODO.
     """
-    def __init__(self, run_prefix = '',  window_min = 0,
+    def __init__(self, run_prefix = '', runparam = {}, window_min = 0,
             window_max = 255, threshold = 10, decluster = True, htime = None):
             self.name = run_prefix
-            self.attrs = ['_time_start', 'initial_array', '_total_time', '_final_array']
+            self.attrs = ['_time_start', 'initial_array', '_total_time', '_final_array','_run_parameters']
             # TODO: entire dict in one file
             try:
                 attrs = self.attrs
@@ -111,6 +111,7 @@ class ZRun:
             except FileNotFoundError:
                 self._time_start = time.time()
                 self.initial_array = self.get_array()
+                self._run_parameters = runparam
 
                 worker_function = make_worker_function(threshold, window_min = window_min,
                     window_max = window_max, decluster = decluster)

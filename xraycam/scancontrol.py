@@ -1,28 +1,46 @@
 import threading, time
+import numpy as np
 from . import camcontrol
 
-class angle_scan():
+class angle_scan:
 
-    def __init__(self, duration, anglerange, stepsize, filename):
-
+    def __init__(self, duration, anglerange, stepsize, prefix, **kwargs):
         self.duration = duration
         self.anglerange = anglerange
         self.stepsize = stepsize
-        self.filename = filename
+        self.prefix = prefix
         self.runset = camcontrol.RunSet()
+        self.kwargs = kwargs
+        self.anglelist = np.arange(self.anglerange[0],self.anglerange[1],self.stepsize)
+
+    def generate_actionlist(self):
+        prefixes = [self.prefix + '_%d' % deg for deg in self.anglelist]
+        self.actionlist = []
+        for angle in self.anglelist:
+            datarunfunc = lambda: camcontrol.DataRun(
+                prefix=self.prefix+'_%d'%angle, runparam={'angle':angle},**self.kwargs)
+            movefunc = ardstep.go_to_degree(angle)
+            self.actionlist.append[[datarunfunc,movefunc]]
 
     def run_scan(self):
-        self.runset
+        from xraycam import async
+        self.generate_actionlist()
+        self.runset.dataruns = async.IterThread(ActionSequence(self.actionlist))
 
-class scan_thread(threading.Thread):
 
-    def __init__(self,stuff):
-        self.stuff = stuff
 
 class ActionSequence:
+    """
+    Takes in a nested list of the form 
+    [[action1,datarun1],[action2,datarun2],...]
+    Takes action1, then evaluates datarun1 etc.
+    """
 
+    def __init__(self,actionlist):
+        self.actionlist = actionlist
+        self.current = None
     
-   def __iter__(self):
+    def __iter__(self):
         return self
 
     def _wait_current_complete(self):
@@ -42,10 +60,12 @@ class ActionSequence:
                     break
 
     def __next__(self):
-        self._wait_current_complete()
         try:
-            run = self.funcalls.pop(0)()
+            action, datarun = self.actionlist.pop(0)
+            run = datarun()
             self.current = run
         except IndexError:
             raise StopIteration
+        self._wait_current_complete()
+        action()
         return run
