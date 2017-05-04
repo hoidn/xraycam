@@ -2,6 +2,18 @@ import threading, time
 import numpy as np
 from . import camcontrol
 
+def _check_for_data_files(prefixlist):
+    import os
+    cachecontents = os.listdir('cache')
+    exists=[]
+    for f in prefixlist:
+        if f+'_final_array' in cachecontents:
+            exists.append([True])
+        else:
+            exists.append([False])
+    return exists
+
+
 class angle_scan:
 
     def __init__(self, duration, anglerange, stepsize, prefix, **kwargs):
@@ -13,30 +25,58 @@ class angle_scan:
         self.kwargs = kwargs
         self.anglelist = np.arange(self.anglerange[0],
             self.anglerange[1]+self.stepsize,self.stepsize)
+        self.prefixes = [self.prefix+'_%d' % angle for angle in self.anglelist]
         self.runthread = None
+        self.continuescan = False
 
     def generate_actionlist(self):
-        prefixes = [self.prefix + '_%d' % deg for deg in self.anglelist]
         self.actionlist = []
-        for angle in self.anglelist:
-            datarunfunc = lambda: camcontrol.DataRun(
+        for ang in self.anglelist:
+            datarunfunc = lambda angle = ang: camcontrol.DataRun(
                 run_prefix=self.prefix+'_%d'%angle, htime=self.duration,
                 runparam={'angle':angle},**self.kwargs)
-            movefunc = lambda: ardstep.go_to_degree(angle)
+            movefunc = lambda angle = ang: ardstep.go_to_degree(angle)
             self.actionlist.append([movefunc,datarunfunc])
 
-    # def run_scan(self):
-    #     from xraycam import async
-    #     self.generate_actionlist()
-    #     self.runset.dataruns = async.IterThread(ActionSequence(self.actionlist))
-
     def run_scan(self):
-        self.generate_actionlist()
-        self.runthread = ScanThread(self.runset,self.actionlist)
-        self.runthread.start()
+        try:
+            self.load_scan()
+        except IOError:
+            self.generate_actionlist()
+            self.runthread = ScanThread(self.runset,self.actionlist)
+            self.runthread.start()
+
+    def load_scan(self,doreload=False):
+        checklist = _check_for_data_files(self.prefixes)
+        if not all(checklist):
+            if not any(checklist):
+                raise IOError('Files not found, cannot load data.')
+            else:
+                raise IOError('Some files found, scan partially complete. \n \
+                    Set continuescan attribute to True to resume scan.')
+        else:
+            if self.runset.dataruns is None or doreload:
+                self.runset.dataruns=[]
+                self.generate_actionlist()
+                for a in self.actionlist:
+                    action, datarun = a
+                    self.runset.insert(datarun())
+            else:
+                print('All files already loaded. Run load_scan with doreload=True to reload files.')
 
 
 
+    def angle_plot(self,start=0,end=-1,show=True,**kwargs):
+        if self.runset.dataruns is None:
+            print('Error: datafiles not loaded.')
+        else:
+            angles = [x.runparam['angle'] for x in self.runset.dataruns]
+            counts = [x.counts_per_second(start=start,end=end) for x in self.runset.dataruns]
+            camcontrol.plt.plot(angles,counts,**kwargs)
+            camcontrol.plt.xlabel('Angle (deg)')
+            camcontrol.plt.ylabel('Counts/sec in region '+str(start)+':'+str(end))
+            if show:
+                camcontrol.plt.show()
 
 class ActionSequence:
     """
@@ -88,8 +128,8 @@ class ScanThread(threading.Thread):
         self.current = None
 
     def run(self):
-        self._wait_current_complete()
-        for el in actionlist:
+        for el in self.actionlist:
+            self._wait_current_complete()
             action, datarun = el
             print('moving before scan')
             action()
@@ -97,6 +137,7 @@ class ScanThread(threading.Thread):
             print('scan started')
             self.current = dr
             self.runset.insert(dr)
+        print('Congratulations, scan is complete! Have a nice day ;)')
 
     def _wait_current_complete(self):
         """
