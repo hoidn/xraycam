@@ -1,6 +1,7 @@
 import threading, time
 import numpy as np
 from . import camcontrol
+from arduinostepper import arduinostepper as ardstep
 
 def _check_for_data_files(prefixlist):
     import os
@@ -14,29 +15,24 @@ def _check_for_data_files(prefixlist):
     return exists
 
 
-class angle_scan:
+class ScanAndAction:
 
-    def __init__(self, duration, anglerange, stepsize, prefix, **kwargs):
-        self.duration = duration
-        self.anglerange = anglerange
-        self.stepsize = stepsize
-        self.prefix = prefix
-        self.runset = camcontrol.RunSet()
-        self.kwargs = kwargs
-        self.anglelist = np.arange(self.anglerange[0],
-            self.anglerange[1]+self.stepsize,self.stepsize)
-        self.prefixes = [self.prefix+'_%d' % angle for angle in self.anglelist]
+    def __init__(self, runset, movetype, movelist, movefunc, continuescan, **kwargs):
+        self.runset = runset
+        self.movetype = movetype
+        self.movelist = movelist
+        self.movefunc = movefunc
         self.runthread = None
-        self.continuescan = False
+        self.continuescan  = continuescan
 
     def generate_actionlist(self):
         self.actionlist = []
-        for ang in self.anglelist:
-            datarunfunc = lambda angle = ang: camcontrol.DataRun(
-                run_prefix=self.prefix+'_%d'%angle, htime=self.duration,
-                runparam={'angle':angle},**self.kwargs)
-            movefunc = lambda angle = ang: ardstep.go_to_degree(angle)
-            self.actionlist.append([movefunc,datarunfunc])
+        for move in self.movelist:
+            datarunfuncs = lambda m = move: camcontrol.DataRun(
+                run_prefix=self.prefix+'_%d'+self.movetype%m, htime=self.duration,
+                runparam={self.movetype:m},**self.kwargs)
+            movefuncs = lambda m = move: self.movefunc(m)
+            self.actionlist.append([movefuncs,datarunfuncs])
 
     def run_scan(self):
         try:
@@ -66,6 +62,26 @@ class angle_scan:
 
 
 
+
+
+class AngleScan:
+
+    def __init__(self, duration, anglerange, stepsize, prefix, **kwargs):
+        self.duration = duration
+        self.anglerange = anglerange
+        self.stepsize = stepsize
+        self.prefix = prefix
+        self.runset = camcontrol.RunSet()
+        self.kwargs = kwargs
+        self.anglelist = []
+        self.prefixes = []
+        for angle in np.arange(self.anglerange[0],self.anglerange[1]+self.stepsize,self.stepsize):
+            self.anglelist.append(angle)
+            self.prefixes.append(self.prefix+'_%d' % angle)
+        self.continuescan = False
+        self.scanandaction = ScanAndAction(self.runset,'angle',self.anglelist,ardstep.go_to_degree,self.continuescan,**kwargs)
+
+
     def angle_plot(self,start=0,end=-1,show=True,**kwargs):
         if self.runset.dataruns is None:
             print('Error: datafiles not loaded.')
@@ -77,6 +93,49 @@ class angle_scan:
             camcontrol.plt.ylabel('Counts/sec in region '+str(start)+':'+str(end))
             if show:
                 camcontrol.plt.show()
+
+    def load_scan(self,doreload = False):
+        self.scanandaction.load_scan(doreload=doreload)
+
+    def run_scan(self):
+        self.scanandaction.run_scan()
+
+class CameraScan:
+
+    def __init__(self, duration, distancerange, stepsize, prefix, **kwargs):
+        self.duration = duration
+        self.distancerange = distancerange
+        self.stepsize = stepsize
+        self.prefix = prefix
+        self.runset = camcontrol.RunSet()
+        self.kwargs = kwargs
+        self.distlist = []
+        self.prefixes = []
+        for dist in np.arange(self.distancerange[0],self.distancerange[1]+self.stepsize,self.stepsize):
+            self.distlist.append(dist)
+            self.prefixes.append(self.prefix+'_%d' % dist)
+        self.continuescan = False
+        self.scanandaction = ScanAndAction(self.runset,'mm_camera',self.distlist,ardstep.go_to_mm,self.continuescan,**kwargs)
+
+
+    # def angle_plot(self,start=0,end=-1,show=True,**kwargs):
+    #     if self.runset.dataruns is None:
+    #         print('Error: datafiles not loaded.')
+    #     else:
+    #         angles = [x.runparam['angle'] for x in self.runset.dataruns]
+    #         counts = [x.counts_per_second(start=start,end=end) for x in self.runset.dataruns]
+    #         camcontrol.plt.plot(angles,counts,**kwargs)
+    #         camcontrol.plt.xlabel('Angle (deg)')
+    #         camcontrol.plt.ylabel('Counts/sec in region '+str(start)+':'+str(end))
+    #         if show:
+    #             camcontrol.plt.show()
+
+    def load_scan(self,doreload = False):
+        self.scanandaction.load_scan(doreload=doreload)
+
+    def run_scan(self):
+        self.scanandaction.run_scan()
+
 
 class ActionSequence:
     """
