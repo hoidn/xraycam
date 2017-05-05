@@ -14,6 +14,8 @@ def _check_for_data_files(prefixlist):
             exists.append(False)
     return exists
 
+def _do_nothing():
+    pass
 
 class ScanAndAction:
 
@@ -112,6 +114,9 @@ class AngleScan:
     def run_scan(self):
         self.scanandaction.run_scan()
 
+    def stop(self):
+        self.scanandaction.runthread.stopevent.set()
+
 class CameraScan:
 
     def __init__(self, duration, distancerange, stepsize, prefix, **kwargs):
@@ -130,85 +135,37 @@ class CameraScan:
         self.scanandaction = ScanAndAction(self.runset,self.prefix,'mm_camera',self.distlist,
             ardstep.go_to_mm,self.continuescan,self.duration,**kwargs)
 
-
-    # def angle_plot(self,start=0,end=-1,show=True,**kwargs):
-    #     if self.runset.dataruns is None:
-    #         print('Error: datafiles not loaded.')
-    #     else:
-    #         angles = [x.runparam['angle'] for x in self.runset.dataruns]
-    #         counts = [x.counts_per_second(start=start,end=end) for x in self.runset.dataruns]
-    #         camcontrol.plt.plot(angles,counts,**kwargs)
-    #         camcontrol.plt.xlabel('Angle (deg)')
-    #         camcontrol.plt.ylabel('Counts/sec in region '+str(start)+':'+str(end))
-    #         if show:
-    #             camcontrol.plt.show()
-
     def load_scan(self,doreload = False):
         self.scanandaction.load_scan(doreload=doreload)
 
     def run_scan(self):
         self.scanandaction.run_scan()
 
-
-class ActionSequence:
-    """
-    Takes in a nested list of the form 
-    [[action1,datarun1],[action2,datarun2],...]
-    Takes action1, then evaluates datarun1 etc.
-    """
-
-    def __init__(self,actionlist):
-        self.actionlist = actionlist
-        self.current = None
-    
-    def __iter__(self):
-        return self
-
-    def _wait_current_complete(self):
-        """
-        Wait until the current run has completed.
-        """
-        import time
-        # Wait until current run is complete
-        if self.current is not None:
-            prev_time = self.current.acquisition_time()
-            while True:
-                cur_time = self.current.acquisition_time()
-                if cur_time != prev_time:
-                    prev_time = cur_time
-                    time.sleep(1)
-                else:
-                    break
-
-    def __next__(self):
-        self._wait_current_complete()
-        try:
-            action, datarun = self.actionlist.pop(0)
-            action()
-            run = datarun()
-            self.current = run
-        except IndexError:
-            raise StopIteration
-        return run
+    def stop(self):
+        self.scanandaction.runthread.stopevent.set()
 
 class ScanThread(threading.Thread):
     
     def __init__(self,runset,actionlist):
         threading.Thread.__init__(self)
+        self.stopevent = threading.Event()
         self.runset = runset
         self.actionlist = actionlist
         self.current = None
 
     def run(self):
         for el in self.actionlist:
-            self._wait_current_complete()
-            action, datarun = el
-            print('moving before scan')
-            action()
-            dr = datarun()
-            print('scan started')
-            self.current = dr
-            self.runset.insert(dr)
+            if not self.stopevent.is_set():
+                self._wait_current_complete()
+                action, datarun = el
+                print('moving before scan')
+                action()
+                dr = datarun()
+                print('scan started')
+                self.current = dr
+                self.runset.insert(dr)
+            else:
+                self.current.stop()
         self._wait_current_complete()
         print('Congratulations, scan complete! Have a nice day ;)')
 
@@ -220,14 +177,41 @@ class ScanThread(threading.Thread):
         # Wait until current run is complete
         if self.current is not None:
             prev_time = self.current.acquisition_time()
-            while True:
+            while not self.stopevent.is_set():
                 cur_time = self.current.acquisition_time()
                 if cur_time != prev_time:
                     prev_time = cur_time
-                    time.sleep(1)
+                    self.stopevent.wait(1)
                 else:
                     break    
 
+class RunSequence:
+    """
+    Class that creates a sequence of DataRun instances, letting each data collection
+    finish before beginning the next.
+    """
+    def __init__(self, runset, prefix = None, number_runs = 0,
+            htime = None, dashinfilename=True, **kwargs):
+        """
+        prefix : str
+            Datarun prefix prefix.
+        number_runs : int
+        htime : str
+        """
+        self.runset = runset
+        if htime is None:
+            raise ValueError("kwarg htime MUST be provided to instantiate RunSequence.")
+        if prefix is None:
+            raise ValueError("RunSequence must have a prefix to save files.")
+        else:
+            prefixes = [prefix + '_%d' % i for i in range(number_runs)]
+        self.datarunfuncs = [lambda run_prefix=prefix: camcontrol.DataRun(run_prefix = run_prefix, htime = htime, **kwargs)
+            for prefix in prefixes]
+        self.actionlist = [[_do_nothing,dr] for dr in self.datarunfuncs]
 
+    def run_scan(self):
+        self.runthread = ScanThread(self.runset,self.actionlist)
+        self.runthread.start()
 
-
+    def stop(self):
+        self.runthread.stopevent.set()

@@ -246,62 +246,6 @@ class DataRun:
         return self.get_frame().counts_per_second(elapsed = self.acquisition_time(), **kwargs)
 
 
-class RunSequence:
-    """
-    Class that creates a sequence of DataRun instances, letting each data collection
-    finish before beginning the next.
-    """
-    def __init__(self, prefix = None, number_runs = 0, run_prefix = None,
-            htime = None, dashinfilename=True, **kwargs):
-        """
-        prefix : str
-            Datarun prefix prefix.
-        number_runs : int
-        htime : str
-        """
-        if htime is None:
-            raise ValueError("kwarg htime MUST be provided to instantiate RunSequence.")
-        if prefix is None:
-            prefixes = [str(time.time()) for _ in range(number_runs)]
-        else:
-            if dashinfilename:
-                prefixes = [prefix + '_%d' % i for i in range(number_runs)] #quick fix for filename problems..
-            else:
-                prefixes = [prefix + '%d' % i for i in range(number_runs)]
-        self.funcalls = [lambda prefix=prefix: DataRun(run_prefix = prefix, htime = htime, **kwargs)
-            for prefix in prefixes]
-        self.current = None
-
-
-    def __iter__(self):
-        return self
-
-    def _wait_current_complete(self):
-        """
-        Wait until the current run has completed.
-        """
-        import time
-        # Wait until current run is complete
-        if self.current is not None:
-            prev_time = self.current.acquisition_time()
-            while True:
-                cur_time = self.current.acquisition_time()
-                if cur_time != prev_time:
-                    prev_time = cur_time
-                    time.sleep(1)
-                else:
-                    break
-
-    def __next__(self):
-        self._wait_current_complete()
-        try:
-            run = self.funcalls.pop(0)()
-            self.current = run
-        except IndexError:
-            raise StopIteration
-        return run
-
-
 class RunSet:
     """
     Class containing a collection of DataRun instances.

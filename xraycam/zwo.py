@@ -150,14 +150,18 @@ class ZRun:
         """
         Stop the acquisition.
         """
-        self._final_array = self.get_array()
-        self._total_time = time.time() - self._time_start
+        try:
+            if self._final_array.any():
+                print('Run already stopped.')
+        except NameError:
+            self._final_array = self.get_array()
+            self._total_time = time.time() - self._time_start
 
-        keys = [self.name + a for a in self.attrs]
-        for k, a in zip(keys, self.attrs):
-            cache_put(self.__dict__[a], key = k)
+            keys = [self.name + a for a in self.attrs]
+            for k, a in zip(keys, self.attrs):
+                cache_put(self.__dict__[a], key = k)
 
-        self.replace_workers(dummy_worker)
+            self.replace_workers(dummy_worker)
 
     def acquisition_time(self):
         elapsed = time.time() - self._time_start 
