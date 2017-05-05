@@ -1,5 +1,5 @@
 import numpy as np
-import detconfig
+import detconfig_zwo
 import pkg_resources
 import copy
 import pdb
@@ -48,18 +48,6 @@ def resource_f(fpath):
 
 def resource_path(fpath):
     return pkg_resources.resource_filename(PKG_NAME, fpath)
-
-
-def calib_params():
-    """
-    Returns (slope, intercept) for the energy calibration.
-    """
-    calib_slope =\
-        (detconfig.point2.energy - detconfig.point1.energy)/\
-        (detconfig.point2.ADC - detconfig.point1.ADC)
-    calib_intercept = detconfig.point1.energy -\
-        detconfig.point1.ADC * calib_slope
-    return calib_slope, calib_intercept
 
 def adc_to_eV(adc_values):
     """Generate an energy scale"""
@@ -174,11 +162,19 @@ def _plot_histogram(values, show = True, xmin = None, xmax = None,
     if show:
         plt.show()
 
+def _load_detector_settings(**kwargs):
+    for k,v in detconfig_zwo.sensorsettings.items():
+        if k not in kwargs:
+            kwargs[k] = v
+
+
+
 # TODO: reimplement inheritance
 class DataRun:
-    def __init__(self, run_prefix = '', rotate = False, photon_value = 45.,runparam = {}, *args, **kwargs):
+    def __init__(self, run_prefix = '', rotate = False, photon_value = 126.,runparam = {}, *args, **kwargs):
         self.rotate = rotate
         self.photon_value = photon_value
+        _load_detector_settings(**kwargs)
 
         self.runparam = runparam
         for k in ('threshold','htime','window_min','window_max'):
