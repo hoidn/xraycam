@@ -9,30 +9,40 @@ def _check_for_data_files(prefixlist):
     exists=[]
     for f in prefixlist:
         if f+'_final_array' in cachecontents:
-            exists.append([True])
+            exists.append(True)
         else:
-            exists.append([False])
+            exists.append(False)
     return exists
 
 
 class ScanAndAction:
 
-    def __init__(self, runset, movetype, movelist, movefunc, continuescan, **kwargs):
+    def __init__(self, runset, prefix, movetype, movelist, movefunc, continuescan, duration, **kwargs):
         self.runset = runset
+        self.prefix = prefix
         self.movetype = movetype
         self.movelist = movelist
         self.movefunc = movefunc
         self.runthread = None
         self.continuescan  = continuescan
+        self.duration = duration
+        self.kwargs = kwargs
+
+    def make_prefix(self,value):
+        if self.movetype == 'angle':
+            r= self.prefix+'_{:d}'.format(value)+self.movetype
+        else:
+            r= self.prefix+'_{:.2f}'.format(value)+self.movetype
+        return r
 
     def generate_actionlist(self):
         self.actionlist = []
         for move in self.movelist:
             datarunfuncs = lambda m = move: camcontrol.DataRun(
-                run_prefix=self.prefix+'_%d'+self.movetype%m, htime=self.duration,
+                run_prefix=self.make_prefix(m), htime=self.duration,
                 runparam={self.movetype:m},**self.kwargs)
             movefuncs = lambda m = move: self.movefunc(m)
-            self.actionlist.append([movefuncs,datarunfuncs])
+            self.actionlist.append([movefuncs,datarunfuncs])    
 
     def run_scan(self):
         try:
@@ -43,12 +53,12 @@ class ScanAndAction:
             self.runthread.start()
 
     def load_scan(self,doreload=False):
-        checklist = _check_for_data_files(self.prefixes)
+        checklist = _check_for_data_files([self.make_prefix(m) for m in self.movelist])
         if not all(checklist):
             if not any(checklist):
                 raise IOError('Files not found, cannot load data.')
             else:
-                raise IOError('Some files found, scan partially complete. \n \
+                raise Exception('Some files found, scan partially complete. \n \
                     Set continuescan attribute to True to resume scan.')
         else:
             if self.runset.dataruns is None or doreload:
@@ -60,9 +70,10 @@ class ScanAndAction:
             else:
                 print('All files already loaded. Run load_scan with doreload=True to reload files.')
 
-
-
-
+    def insert_scan(self,movevalue):
+        self.movefunc(movevalue)
+        self.runset.insert(camcontrol.DataRun(run_prefix=self.make_prefix(movevalue),htime=self.duration,
+            runparam={self.movetype:movevalue},**self.kwargs))
 
 class AngleScan:
 
@@ -74,12 +85,13 @@ class AngleScan:
         self.runset = camcontrol.RunSet()
         self.kwargs = kwargs
         self.anglelist = []
-        self.prefixes = []
+        # self.prefixes = []
         for angle in np.arange(self.anglerange[0],self.anglerange[1]+self.stepsize,self.stepsize):
             self.anglelist.append(angle)
-            self.prefixes.append(self.prefix+'_%d' % angle)
+            # self.prefixes.append(self.prefix+'_%d'+ % angle)
         self.continuescan = False
-        self.scanandaction = ScanAndAction(self.runset,'angle',self.anglelist,ardstep.go_to_degree,self.continuescan,**kwargs)
+        self.scanandaction = ScanAndAction(self.runset,self.prefix,'angle',self.anglelist,
+            ardstep.go_to_degree,self.continuescan,self.duration,**kwargs)
 
 
     def angle_plot(self,start=0,end=-1,show=True,**kwargs):
@@ -110,12 +122,13 @@ class CameraScan:
         self.runset = camcontrol.RunSet()
         self.kwargs = kwargs
         self.distlist = []
-        self.prefixes = []
+        # self.prefixes = []
         for dist in np.arange(self.distancerange[0],self.distancerange[1]+self.stepsize,self.stepsize):
             self.distlist.append(dist)
-            self.prefixes.append(self.prefix+'_%d' % dist)
+            # self.prefixes.append(self.prefix+'_%d' % dist)
         self.continuescan = False
-        self.scanandaction = ScanAndAction(self.runset,'mm_camera',self.distlist,ardstep.go_to_mm,self.continuescan,**kwargs)
+        self.scanandaction = ScanAndAction(self.runset,self.prefix,'mm_camera',self.distlist,
+            ardstep.go_to_mm,self.continuescan,self.duration,**kwargs)
 
 
     # def angle_plot(self,start=0,end=-1,show=True,**kwargs):
@@ -196,7 +209,7 @@ class ScanThread(threading.Thread):
             print('scan started')
             self.current = dr
             self.runset.insert(dr)
-        print('Congratulations, scan is complete! Have a nice day ;)')
+        print('Congratulations, last scan has started! Have a nice day ;)')
 
     def _wait_current_complete(self):
         """

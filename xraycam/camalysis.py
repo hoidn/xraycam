@@ -67,9 +67,10 @@ def add_energy_scale(lineout,known_energy,known_bin='peak',rebinparam=1,camerain
             indexfromcenter=-indexfromcenter # if camera gets flipped upside down, just reverse the indices
     return (energy_from_x_position(calc_bragg_angle(known_energy,braggorder),indexfromcenter,rebinparam,braggorder),lineout)
     
-def fwhm_ev(arr2d,fwhm_smooth=2):
+# def fwhm_ev(arr2d,fwhm_smooth=2):
+def fwhm_2d(arr2d,fwhm_smooth=2):
     """
-    Given a 2d-array of [energies(eV),lineout], calculate fwhm of peak in the lineout.
+    Given a 2d-array of [x's,y's] calculate fwhm of peak in the lineout.
     """
     x, y = arr2d
     y = gfilt(y,fwhm_smooth)
@@ -256,3 +257,6 @@ def anglecounts(runlist):
 #     if show:
 #         plt.show()
 #     return xylist
+
+def makerange(w,s):
+    return [[i,i+w] for i in np.arange(0,1936-w,s)]
