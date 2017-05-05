@@ -209,7 +209,8 @@ class ScanThread(threading.Thread):
             print('scan started')
             self.current = dr
             self.runset.insert(dr)
-        print('Congratulations, last scan has started! Have a nice day ;)')
+        self._wait_current_complete()
+        print('Congratulations, scan complete! Have a nice day ;)')
 
     def _wait_current_complete(self):
         """
