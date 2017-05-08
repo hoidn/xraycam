@@ -260,3 +260,43 @@ def anglecounts(runlist):
 
 def makerange(w,s):
     return [[i,i+w] for i in np.arange(0,1936-w,s)]
+
+class CalibPeakDrift:
+
+    def __init__(self,dataruns,runoninit=True):
+        self.dataruns = dataruns
+
+    def make_peakdrift_list(self,plot=False,show=False,**kwargs):
+        peakdriftlist = []
+        try:
+            for dr in dataruns:
+                peakdriftlist.append([dr.base._time_start,get_peaks(dr.get_lineout(**kwargs))[0,0]])
+        peakdriftlist = np.transpose(peakdriftlist)
+        times, peaks = peakdriftlist
+        times = (times-times[0])/60
+        peakdriftlist = np.array([times,peaks])
+        if plot:
+            plt.plot(*peakdriftlist,label='drift')
+            if show:
+                plt.show()
+        self.peakdriftlist = peakdriftlist
+        return peakdriftlist
+
+    def exponential_fit(self,initialparams,show=True):
+        import lmfit
+        self.expmodel = lmfit.Model(self.exponential_func)
+        self.expparams = self.expmodel.make_params()
+        for param in self.expparams:
+            if param,val in initialparams.items():
+                self.expparams[param].set(value=val)
+        self.expfit = self.expmodel.fit(self.peakdriftlist[1],self.expparams,t=self.peakdriftlist[0])
+        if show:
+            plt.plot(*self.peakdriftlist,label='data')
+            plt.plot(self.peakdriftlist[0],,self.expfit.best_fit, label='fit')
+            plt.title(self.expparams)
+            plt.show()
+
+
+    def exponential_func(t,tau,A,offset):
+        return A*(1-np.exp(-t/tau))+offset
+
