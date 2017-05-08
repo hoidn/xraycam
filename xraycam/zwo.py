@@ -153,7 +153,7 @@ class ZRun:
         try:
             if self._final_array.any():
                 print('Run already stopped.')
-        except NameError:
+        except AttributeError:
             self._final_array = self.get_array()
             self._total_time = time.time() - self._time_start
 
