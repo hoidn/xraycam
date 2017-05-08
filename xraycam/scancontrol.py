@@ -151,7 +151,12 @@ class CameraScan:
         self.scanandaction.insert_scan()
 
 class ScanThread(threading.Thread):
-    
+    """
+    Class that takes in a runset and an actionlist of the form 
+    [[action0,datarun0],[action1,datarun1],...],
+    in which action and datarun are functions. For each element, the action is taken,
+    and then the datarun is started, and inserted into the runset.
+    """
     def __init__(self,runset,actionlist):
         threading.Thread.__init__(self)
         self.stopevent = threading.Event()
@@ -221,3 +226,74 @@ class RunSequence:
 
     def stop(self):
         self.runthread.stopevent.set()
+
+class ActionQueue(threading.Thread):
+    """
+    Class that takes in a list of dictionaries describing actions,
+    and does them in order, waiting for the action to complete before
+    moving on to the next action.
+    """
+    def __init__(self,name='acitonqueuethread'):
+        threading.Thread.__init__(self,name=name)
+        self.stopevent = threading.Event()
+        self.queue = []
+        self.currentindex = 0
+        self.runsetlist
+
+    def run(self):
+        if not self.stopevent.is_set():
+            if self.currentindex < len(self.queue):
+                actiondict = self.queue[self.currentindex]
+                if actiondict['action'] == 'capture':
+                    self.datarun_action(runset=actiondict['action'],
+                        run_prefix=actiondict['run_prefix'],htime=actiondict['htime'],
+                        **actiondict['kwargs'])
+                elif actiondict['action'] == 'move_sample':
+                    self.move_sample_action(actiondict['degree'])
+                elif actiondict['action'] == 'move_camera':
+                    self.move_camera_action(actiondict['mm'])
+                self.currentindex+=1
+
+
+    def datarun_action(self,runset=None,run_prefix,htime,**kwargs):
+        if runset is None:
+            runset = camcontrol.RunSet()
+            self.runsetlist.insert(runset)
+        print("Starting datarun: "+run_prefix)
+        dr = camcontrol.DataRun(run_prefix = run_prefix, htime = htime, **kwargs)
+        self.current = dr
+        runset.insert(dr)
+        self._wait_current_complete()
+
+    def move_sample_action(self,degree):
+        print("Moving sample to position: "+str(degree)+'deg')
+        ardstep.go_to_degree(degree)
+
+    def move_camera_action(self,mm):
+        print("Moving camera to position: "+str(mm)+'mm')
+        ardstep.go_to_mm(mm)
+
+    def insert_action(self,index=None,actiondict):
+        if index is None:
+            self.queue.append(actiondict)
+        else:
+            self.queue.insert(index,actiondict)
+
+    def _wait_current_complete(self):
+        """
+        Wait until the current run has completed.
+        """
+        import time
+        # Wait until current run is complete
+        if self.current is not None:
+            prev_time = self.current.acquisition_time()
+            while not self.stopevent.is_set():
+                cur_time = self.current.acquisition_time()
+                if cur_time != prev_time:
+                    prev_time = cur_time
+                    self.stopevent.wait(1)
+                else:
+                    break 
+
+
+
