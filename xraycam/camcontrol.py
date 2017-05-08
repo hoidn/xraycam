@@ -1,5 +1,4 @@
 import numpy as np
-import detconfig_zwo
 import pkg_resources
 import copy
 import pdb
@@ -13,6 +12,7 @@ from functools import reduce
 from . import utils
 from . import config
 from . import zwo
+from . import detconfig_zwo
 
 if config.plotting_mode != 'minigui':
     if config.plotting_mode == 'notebook':
@@ -142,49 +142,43 @@ def _plot_lineout(pixeli, intensity, show = False, label = '', error_bars = Fals
         plt.show()
     return intensity/norm
 
-def _plot_histogram(values, show = True, xmin = None, xmax = None,
-        calibrate = False, label = '', **kwargs):
-#    if x is None:
-#        x = np.array(list(range(len(values))))
-    if calibrate:
-        plt.xlabel('Energy (eV)')
-        values = adc_to_eV(values)
-        #x = adc_to_eV(x)
-        #plt.plot(x, values, label = label, **kwargs)
-    else:
-        plt.xlabel('ADC value')
-    if xmin is not None:
-        values[values < xmin] = 0
-    if xmax is not None:
-        values[values > xmax] = 0
-    # TODO: make mpl_plotly interpret the kwarg `bins` (instead of `nbinsx`)
-    plt.hist(values, label = label, **kwargs)
+def _plot_histogram(values,xmin=5,xmax=255,show=True,binsize=1.000001,calib=[None,None],label='histogram'):
+    values[values < xmin] = 0
+    values[values > xmax] = 0
+    slope = 1
+    if calib[0] is not None:
+        if calib[1] is None:
+            calib[1] = [0,0]
+        slope = np.abs((calib[1][1]-calib[0][1])/(calib[1][0]-calib[0][0]))
+        values = values*slope
+    plt.hist(values,xbins=dict(start=xmin*slope,end=xmax*slope,size=binsize*slope),label=label)
     if show:
         plt.show()
 
-def _load_detector_settings(**kwargs):
+def _load_detector_settings(kwargs):
     for k,v in detconfig_zwo.sensorsettings.items():
         if k not in kwargs:
             kwargs[k] = v
 
 
-
-# TODO: reimplement inheritance
 class DataRun:
-    def __init__(self, run_prefix = '', rotate = False, photon_value = 126.,runparam = {}, *args, **kwargs):
+    def __init__(self, run_prefix = '', rotate = False, runparam = {}, *args, **kwargs):
         self.rotate = rotate
-        self.photon_value = photon_value
-        _load_detector_settings(**kwargs)
+        _load_detector_settings(kwargs)
+        try:
+            self.photon_value = detconfig_zwo.datasettings['photon_value']
+        except KeyError:
+            self.photon_value = 126.
 
         self.runparam = runparam
         for k in ('threshold','htime','window_min','window_max'):
             if k in kwargs:
                 runparam[k]=kwargs[k]
         runparam['photon_value']=self.photon_value
-
         from . import zwo
         self.base = zwo.ZRun(run_prefix = run_prefix, runparam = self.runparam,*args, **kwargs)
         self.name = run_prefix
+        self.runparam = self.base._run_parameters #override previous runparam with the actual values from ZRun (i.e. the cached files if loaded from cache)
 
     def acquisition_time(self):
         return self.base.acquisition_time()
@@ -215,17 +209,11 @@ class DataRun:
             return int(np.ceil(x / 10.0)) * 10
         return roundup(config.frames_per_second * humanfriendly.parse_timespan(timestring))
 
-    def plot_histogram(self, cluster_rejection = True, show = True,
-            calibrate = True, **kwargs):
+    def plot_histogram(self, **kwargs):
         """
         Plot histogram output from the camera acquisition.
         """
-        pixels, singles = self.get_histograms()
-        if cluster_rejection:
-            values = singles
-        else:
-            values = pixels
-        _plot_histogram(values, show = show, calibrate = calibrate, **kwargs)
+        return self.get_frame().plot_histogram(**kwargs)
 
     def get_lineout(self,**kwargs):
         """
@@ -360,10 +348,15 @@ class Frame:
         self.name = name
         self.photon_value = photon_value
 
-    def show(self, **kwargs):
+    def show(self,width=10, vmax=None, **kwargs):
         """Show the frame. Kwargs are passed through to plt.imshow."""
-        plt.imshow(self.data, **kwargs)
-        plt.show()
+        import matplotlib.pyplot as mplt
+        if vmax is None:
+            vmax = np.max(self.data)/2
+        fig, ax = mplt.subplots(figsize=(width,1936/1096*width))
+        cax = ax.imshow(self.data/self.photon_value,vmax=vmax,interpolation='none')
+        cbar = fig.colorbar(cax, ticks=list(range(int(np.max(self.data)))))
+        mplt.show()
 
     def get_data(self, **kwargs):
         return self.data
@@ -448,16 +441,13 @@ class Frame:
         return _plot_lineout(*self.get_lineout(rebin = rebin, smooth = smooth,**kwargs),
             show = show, error_bars = error_bars, label = label, peaknormalize = peaknormalize, normalize=normalize)
 
-    def plot_histogram(self, show = True, calibrate = False, **kwargs):
+    def plot_histogram(self, show = True, binsize=1.000001, xmin=5, xmax=255, calibrate = [None,None], **kwargs):
         """
         Plot and return a histogram of pixel values.
 
         kwargs are passed to plt.plot.
         """
-        flat = self.data.flatten()
-        nonzero_flat = flat[flat != 0]
-        _plot_histogram(nonzero_flat, show = show,
-                calibrate = calibrate, **kwargs)
+        _plot_histogram(self.data,xmin=xmin,xmax=xmax,binsize=binsize,calib=calib,**kwargs)
 
     def counts_per_second(self, elapsed = None, start = 0, end = -1):
         """

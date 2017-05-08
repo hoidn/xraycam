@@ -117,6 +117,9 @@ class AngleScan:
     def stop(self):
         self.scanandaction.runthread.stopevent.set()
 
+    def insert_scan(self):
+        self.scanandaction.insert_scan()
+
 class CameraScan:
 
     def __init__(self, duration, distancerange, stepsize, prefix, **kwargs):
@@ -144,6 +147,9 @@ class CameraScan:
     def stop(self):
         self.scanandaction.runthread.stopevent.set()
 
+    def insert_scan(self):
+        self.scanandaction.insert_scan()
+
 class ScanThread(threading.Thread):
     
     def __init__(self,runset,actionlist):
@@ -156,7 +162,6 @@ class ScanThread(threading.Thread):
     def run(self):
         for el in self.actionlist:
             if not self.stopevent.is_set():
-                self._wait_current_complete()
                 action, datarun = el
                 print('moving before scan')
                 action()
@@ -164,6 +169,7 @@ class ScanThread(threading.Thread):
                 print('scan started')
                 self.current = dr
                 self.runset.insert(dr)
+                self._wait_current_complete()
             else:
                 self.current.stop()
         self._wait_current_complete()
