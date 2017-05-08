@@ -403,7 +403,7 @@ class Frame:
         new.data[hot_indices] = 0
         return new
 
-#note to self 3/6/17: changed the xrange and yrange below to None so that we don't lost the edge of the frame
+#note to self 3/6/17: changed the xrange and yrange below to None so that we don't lose the edge of the frame
     def _raw_lineout(self, xrange=(None,None), yrange=(None,None),**kwargs):
         return np.sum(self.data[yrange[0]:yrange[1],xrange[0]:xrange[1]], axis = 0) / self.photon_value
 
