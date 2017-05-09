@@ -96,9 +96,12 @@ class ZRun:
     TODO.
     """
     def __init__(self, run_prefix = '', runparam = {}, window_min = 0,
-            window_max = 255, threshold = 10, decluster = True, htime = None):
+            window_max = 255, threshold = 10, decluster = True, htime = None, norunparam = False):
             self.name = run_prefix
-            self.attrs = ['_time_start', 'initial_array', '_total_time', '_final_array','_run_parameters']
+            if norunparam:
+                self.attrs = ['_time_start', 'initial_array', '_total_time', '_final_array']
+            else:
+                self.attrs = ['_time_start', 'initial_array', '_total_time', '_final_array','_run_parameters']
             # TODO: entire dict in one file
             try:
                 attrs = self.attrs

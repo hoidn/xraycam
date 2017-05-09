@@ -1,4 +1,4 @@
-from . import detconfig
+# from . import detconfig
 from . import camcontrol
 from . import utils
 import numpy as np
