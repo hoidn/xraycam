@@ -233,19 +233,19 @@ class ActionQueue(threading.Thread):
     and does them in order, waiting for the action to complete before
     moving on to the next action.
     """
-    def __init__(self,name='acitonqueuethread'):
+    def __init__(self,name='actionqueuethread'):
         threading.Thread.__init__(self,name=name)
         self.stopevent = threading.Event()
         self.queue = []
         self.currentindex = 0
-        self.runsetlist
+        self.runsetlist = []
 
     def run(self):
-        if not self.stopevent.is_set():
-            if self.currentindex < len(self.queue):
+        while self.currentindex < len(self.queue):
+            if not self.stopevent.is_set():
                 actiondict = self.queue[self.currentindex]
                 if actiondict['action'] == 'capture':
-                    self.datarun_action(runset=actiondict['action'],
+                    self.datarun_action(runset=actiondict['runset'],
                         run_prefix=actiondict['run_prefix'],htime=actiondict['htime'],
                         **actiondict['kwargs'])
                 elif actiondict['action'] == 'move_sample':
@@ -255,7 +255,7 @@ class ActionQueue(threading.Thread):
                 self.currentindex+=1
 
 
-    def datarun_action(self,runset=None,run_prefix,htime,**kwargs):
+    def datarun_action(self,runset,run_prefix,htime,**kwargs):
         if runset is None:
             runset = camcontrol.RunSet()
             self.runsetlist.insert(runset)
@@ -273,7 +273,7 @@ class ActionQueue(threading.Thread):
         print("Moving camera to position: "+str(mm)+'mm')
         ardstep.go_to_mm(mm)
 
-    def insert_action(self,index=None,actiondict):
+    def insert_action(self,actiondict,index=None):
         if index is None:
             self.queue.append(actiondict)
         else:
