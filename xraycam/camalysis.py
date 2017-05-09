@@ -300,3 +300,12 @@ class CalibPeakDrift:
     def exponential_func(t,tau,A,offset):
         return A*(1-np.exp(-t/tau))+offset
 
+def find_files(searchlist):
+    regex = r'('+r'.*'.join(searchlist)+r'.*)_final_array'
+    matches = []
+    pattern = re.compile(regex)
+    for file in os.listdir('cache'):
+        m = pattern.match(file)
+        if m is not None:
+            matches.append(m.groups(0))
+    return sorted(matches)
