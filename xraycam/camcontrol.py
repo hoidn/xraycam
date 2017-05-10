@@ -162,7 +162,7 @@ def _load_detector_settings(kwargs):
 
 
 class DataRun:
-    def __init__(self, run_prefix = '', rotate = False, runparam = {}, *args, **kwargs):
+    def __init__(self, run_prefix = '', rotate = False, runparam = {}, norunparam = False, *args, **kwargs):
         self.rotate = rotate
         _load_detector_settings(kwargs)
         try:
@@ -176,9 +176,10 @@ class DataRun:
                 runparam[k]=kwargs[k]
         runparam['photon_value']=self.photon_value
         from . import zwo
-        self.base = zwo.ZRun(run_prefix = run_prefix, runparam = self.runparam,*args, **kwargs)
-        self.name = run_prefix
-        self.runparam = self.base._run_parameters #override previous runparam with the actual values from ZRun (i.e. the cached files if loaded from cache)
+        self.base = zwo.ZRun(run_prefix = run_prefix, runparam = self.runparam, norunparam = norunparam, *args, **kwargs)
+        self.name = run_prefix      
+        if not norunparam:
+            self.runparam = self.base._run_parameters #override previous runparam with the actual values from ZRun (i.e. the cached files if loaded from cache)
 
     def acquisition_time(self):
         return self.base.acquisition_time()
@@ -351,11 +352,12 @@ class Frame:
     def show(self,width=10, vmax=None, **kwargs):
         """Show the frame. Kwargs are passed through to plt.imshow."""
         import matplotlib.pyplot as mplt
+        countdata = self.data/self.photon_value
         if vmax is None:
-            vmax = np.max(self.data)/2
+            vmax = np.max(countdata)/2
         fig, ax = mplt.subplots(figsize=(width,1936/1096*width))
-        cax = ax.imshow(self.data/self.photon_value,vmax=vmax,interpolation='none')
-        cbar = fig.colorbar(cax, ticks=list(range(int(np.max(self.data)))))
+        cax = ax.imshow(countdata,vmax=vmax,interpolation='none',norm=LogNorm(vmin=1, vmax=vmax))
+        cbar = fig.colorbar(cax, ticks=np.insert(np.arange(0,int(np.max(vmax)),5),0,1),format='$%d$',fraction=0.05, pad=0.04)
         mplt.show()
 
     def get_data(self, **kwargs):
@@ -447,7 +449,7 @@ class Frame:
 
         kwargs are passed to plt.plot.
         """
-        _plot_histogram(self.data,xmin=xmin,xmax=xmax,binsize=binsize,calib=calib,**kwargs)
+        _plot_histogram(self.data.flatten(),xmin=xmin,xmax=xmax,binsize=binsize,calib=calibrate,**kwargs)
 
     def counts_per_second(self, elapsed = None, start = 0, end = -1):
         """

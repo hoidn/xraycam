@@ -516,6 +516,13 @@ class kalpha_linear_combination_fit:
         # for c in self.complist[:rindex]:
         #     tot=tot+np.sum(c[1])
 
+    def print_fit_summary(self):
+        self.calc_contributions()
+        fitbestvalues = self.out.best_values
+        print('Oxidized Kalpha1: '+str(fitbestvalues['oxidized_1_center'])+' eV')
+        print('Reduced Kalpha1: '+str(fitbestvalues['reduced_1_center'])+' eV')
+
+
 
 
 
