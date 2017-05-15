@@ -352,12 +352,15 @@ class Frame:
     def show(self,width=10, vmax=None, **kwargs):
         """Show the frame. Kwargs are passed through to plt.imshow."""
         import matplotlib.pyplot as mplt
+        from matplotlib.colors import LogNorm
         countdata = self.data/self.photon_value
         if vmax is None:
-            vmax = np.max(countdata)/2
+            vmax = np.max(countdata)*0.7
         fig, ax = mplt.subplots(figsize=(width,1936/1096*width))
         cax = ax.imshow(countdata,vmax=vmax,interpolation='none',norm=LogNorm(vmin=1, vmax=vmax))
-        cbar = fig.colorbar(cax, ticks=np.insert(np.arange(0,int(np.max(vmax)),5),0,1),format='$%d$',fraction=0.05, pad=0.04)
+        cbar = fig.colorbar(cax, 
+            ticks=[int(x) for x in np.logspace(0.01,np.log10(vmax),num=8)],#np.insert(np.arange(0,int(vmax),vmax/10),0,1),
+            format='$%d$',fraction=0.05, pad=0.04)
         mplt.show()
 
     def get_data(self, **kwargs):
@@ -368,7 +371,7 @@ class Frame:
             name =  _longest_common_substring(self.name, other.name)
         else:
             name = ''
-        new = Frame(array = self.data, name = name)
+        new = Frame(array = self.data, name = name, rotate=True, photon_value=self.photon_value)
         new.data = new.data + other.data
         new.time = self.time + other.time
         return new
