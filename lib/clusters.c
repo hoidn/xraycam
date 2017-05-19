@@ -218,8 +218,8 @@ void searchFrame_array_8(uint8_t *declustered, uint8_t *arr, int n, int m, int t
     Cluster cluster; 
     //boolean array that records which pixels have been explored by the BFS. 
     uint8_t explored[n * m * sizeof(uint8_t)];
-    uint8_t clusterx;
-    uint8_t clustery;
+    uint32_t clusterx;
+    uint32_t clustery;
     memset(&explored, 0, n * m * sizeof(uint8_t));
     for (int i = 1; i < n - 1; i ++) {
         for (int j = 1; j < m - 1; j ++) {
