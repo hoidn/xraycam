@@ -162,13 +162,13 @@ def _load_detector_settings(kwargs):
 
 
 class DataRun:
-    def __init__(self, run_prefix = '', rotate = False, runparam = {}, norunparam = False, *args, **kwargs):
+    def __init__(self, run_prefix = '', rotate = False, runparam = {}, norunparam = False, photon_value = 1, *args, **kwargs):
         self.rotate = rotate
         _load_detector_settings(kwargs)
         try:
             self.photon_value = detconfig_zwo.datasettings['photon_value']
         except KeyError:
-            self.photon_value = 126.
+            self.photon_value = photon_value
 
         self.runparam = runparam
         for k in ('threshold','htime','window_min','window_max'):
@@ -197,7 +197,7 @@ class DataRun:
         # TODO: do we need this attribute?
         time = self.acquisition_time()
         self._frame = Frame(array = self.get_array(), name = self.name,
-            photon_value = self.photon_value, time = time)
+            photon_value = self.photon_value, time = time, rotate= self.rotate)
         return self._frame
 
     @staticmethod
@@ -452,7 +452,7 @@ class Frame:
 
         kwargs are passed to plt.plot.
         """
-        _plot_histogram(self.data.flatten(),xmin=xmin,xmax=xmax,binsize=binsize,calib=calibrate,**kwargs)
+        _plot_histogram(self.data.flatten(),xmin=xmin,xmax=xmax,binsize=binsize,calib=calibrate,show=show,**kwargs)
 
     def counts_per_second(self, elapsed = None, start = 0, end = -1):
         """

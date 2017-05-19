@@ -305,6 +305,7 @@ def exponential_func(t,tau,A,offset):
         return A*(1-np.exp(-t/tau))+offset
 
 def find_files(searchlist):
+    import re, os
     regex = r'('+r'.*'.join(searchlist)+r'.*)_final_array'
     matches = []
     pattern = re.compile(regex)

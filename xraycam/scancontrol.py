@@ -102,7 +102,7 @@ class AngleScan:
         else:
             angles = [x.runparam['angle'] for x in self.runset.dataruns]
             counts = [x.counts_per_second(start=start,end=end) for x in self.runset.dataruns]
-            camcontrol.plt.plot(angles,counts,**kwargs)
+            camcontrol.plt.plot(angles,counts,label='angle_scan',**kwargs)
             camcontrol.plt.xlabel('Angle (deg)')
             camcontrol.plt.ylabel('Counts/sec in region '+str(start)+':'+str(end))
             if show:
