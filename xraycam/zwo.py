@@ -109,7 +109,7 @@ class ZRun:
                         print( "starting acquisition")
                         time.sleep(humanfriendly.parse_timespan(htime))
                         self.stop()
-                        print("stopped acquisistion")
+                        print("stopped acquisition")
                     t_thread = Thread(target = timeit, args = ())
                     t_thread.start()
 
@@ -139,8 +139,9 @@ class ZRun:
             if self._final_array.any():
                 print('Run already stopped.')
         except AttributeError:
-            self._final_array = self.get_array()
             self._total_time = time.time() - self._time_start
+            self._final_array = self.get_array()
+            # self._total_time = time.time() - self._time_start
 
             keys = [self.name + a for a in self.attrs]
             for k, a in zip(keys, self.attrs):

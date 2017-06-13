@@ -7,7 +7,7 @@ from xraycam.camcontrol import _rebin_spectrum
 from scipy.ndimage.filters import gaussian_filter as gfilt
 from xraycam.camcontrol import plt
 
-@utils.memoize(timeout = None)
+# @utils.memoize(timeout = None)
 def get_hot_pixels(darkrun = None, threshold = 0):
     """
     darkrun : camcontrol.DataRun
@@ -19,7 +19,7 @@ def get_hot_pixels(darkrun = None, threshold = 0):
     """
     if darkrun is None:
         darkrun = camcontrol.DataRun(run_prefix = detconfig.darkrun_prefix_map[detconfig.sensor_id])
-    array = darkrun.get_array()
+    array = darkrun.get_frame().data
     return np.where(array > threshold)
 
 def fwhm(arr1d):

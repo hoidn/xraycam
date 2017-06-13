@@ -145,13 +145,14 @@ def _plot_lineout(pixeli, intensity, show = False, label = '', error_bars = Fals
 def _plot_histogram(values,xmin=5,xmax=255,show=True,binsize=1.000001,calib=[None,None],label='histogram'):
     values[values < xmin] = 0
     values[values > xmax] = 0
+    data = values[values>0]
     slope = 1
     if calib[0] is not None:
         if calib[1] is None:
             calib[1] = [0,0]
         slope = np.abs((calib[1][1]-calib[0][1])/(calib[1][0]-calib[0][0]))
-        values = values*slope
-    plt.hist(values,xbins=dict(start=xmin*slope,end=xmax*slope,size=binsize*slope),label=label)
+        data = data*slope
+    plt.hist(data,xbins=dict(start=xmin*slope,end=xmax*slope,size=binsize*slope),label=label)
     if show:
         plt.show()
 

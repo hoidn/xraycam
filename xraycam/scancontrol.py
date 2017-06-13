@@ -99,7 +99,7 @@ class AngleScan:
     def angle_plot(self,start=0,end=-1,show=True,**kwargs):
         if self.runset.dataruns is None:
             print('Error: datafiles not loaded.')
-        else:
+        else:#TODO: sort plot based on angles, in case run gets iserted with angle out of order
             angles = [x.runparam['angle'] for x in self.runset.dataruns]
             counts = [x.counts_per_second(start=start,end=end) for x in self.runset.dataruns]
             camcontrol.plt.plot(angles,counts,label='angle_scan',**kwargs)
@@ -117,8 +117,8 @@ class AngleScan:
     def stop(self):
         self.scanandaction.runthread.stopevent.set()
 
-    def insert_scan(self):
-        self.scanandaction.insert_scan()
+    def insert_scan(self,movevalue):
+        self.scanandaction.insert_scan(movevalue)
 
 class CameraScan:
 
@@ -147,8 +147,8 @@ class CameraScan:
     def stop(self):
         self.scanandaction.runthread.stopevent.set()
 
-    def insert_scan(self):
-        self.scanandaction.insert_scan()
+    def insert_scan(self,movevalue):
+        self.scanandaction.insert_scan(movevalue)
 
 class ScanThread(threading.Thread):
     """
