@@ -163,7 +163,7 @@ def _load_detector_settings(kwargs):
 
 
 class DataRun:
-    def __init__(self, run_prefix = '', rotate = False, runparam = {}, norunparam = False, photon_value = 1, *args, **kwargs):
+    def __init__(self, run_prefix = '', rotate = False, runparam = {}, norunparam = False, photon_value = 1, loadonly=False, *args, **kwargs):
         self.rotate = rotate
         _load_detector_settings(kwargs)
         try:
@@ -177,7 +177,7 @@ class DataRun:
                 runparam[k]=kwargs[k]
         runparam['photon_value']=self.photon_value
         from . import zwo
-        self.base = zwo.ZRun(run_prefix = run_prefix, runparam = self.runparam, norunparam = norunparam, *args, **kwargs)
+        self.base = zwo.ZRun(run_prefix = run_prefix, runparam = self.runparam, norunparam = norunparam, loadonly=loadonly,*args, **kwargs)
         self.name = run_prefix      
         if not norunparam:
             self.runparam = self.base._run_parameters #override previous runparam with the actual values from ZRun (i.e. the cached files if loaded from cache)
@@ -335,8 +335,10 @@ class RunSet:
         _plot_lineout(*lineout,show=show,label=label)
         return lineout
 
-    def get_total_frame(self):
-        return np.sum([x.get_frame().data for x in self.dataruns],axis=0)
+    def get_total_frame(self,crop=[None,None]):
+        import operator
+        from functools import reduce
+        return reduce(operator.add,[x.get_frame() for x in self.dataruns[crop[0]:crop[1]]])
 
 
 class Frame:

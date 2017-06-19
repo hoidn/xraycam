@@ -78,7 +78,7 @@ class ZRun:
     TODO.
     """
     def __init__(self, run_prefix = '', runparam = {}, window_min = 0,
-            window_max = 255, threshold = 10, decluster = True, htime = None, norunparam = False):
+            window_max = 255, threshold = 10, decluster = True, htime = None, norunparam = False, loadonly = False):
             self.name = run_prefix
             if norunparam:
                 self.attrs = ['_time_start', 'initial_array', '_total_time', '_final_array']
@@ -94,24 +94,28 @@ class ZRun:
                 print ("Loaded from cache.")
             # Do an actual data collection
             except FileNotFoundError:
-                self._time_start = time.time()
-                self.initial_array = self.get_array()
-                self._run_parameters = runparam
+                if not loadonly:
+                    self._time_start = time.time()
+                    self.initial_array = self.get_array()
+                    self._run_parameters = runparam
 
-                worker_function = make_worker_function(threshold, window_min = window_min,
-                    window_max = window_max, decluster = decluster)
+                    worker_function = make_worker_function(threshold, window_min = window_min,
+                        window_max = window_max, decluster = decluster)
 
-                # Kill the old workers and launch new ones
-                self.replace_workers(worker_function)
+                    # Kill the old workers and launch new ones
+                    self.replace_workers(worker_function)
 
-                if htime is not None:
-                    def timeit():
-                        print( "starting acquisition")
-                        time.sleep(humanfriendly.parse_timespan(htime))
-                        self.stop()
-                        print("stopped acquisition")
-                    t_thread = Thread(target = timeit, args = ())
-                    t_thread.start()
+                    if htime is not None:
+                        def timeit():
+                            print( "starting acquisition")
+                            time.sleep(humanfriendly.parse_timespan(htime))
+                            self.stop()
+                            print("stopped acquisition")
+                        t_thread = Thread(target = timeit, args = ())
+                        t_thread.start()
+                else:
+                    print("Loadonly set true, but file not found in cache.")
+
 
     def replace_workers(self, worker_function):
         """
