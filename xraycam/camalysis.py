@@ -77,7 +77,7 @@ def fwhm_2d(arr2d,fwhm_smooth=2):
     y = gfilt(y,fwhm_smooth)
     spline = UnivariateSpline(x, y - np.max(y)/2, s = 0)
     r1, r2 = spline.roots()
-    return format(r2 - r1, '.3f')
+    return r2 - r1
 
 # def plot_with_energy_scale(datarun,known_energy,yrange=[0,-1],xrange=[0,-1],rebin=1,show=True,peaknormalize=False, label=None,calcfwhm=False,parabolic=False,**kwargs):
 #     if parabolic == False:

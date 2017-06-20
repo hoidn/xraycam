@@ -54,14 +54,18 @@ class ScanAndAction:
             self.runthread = ScanThread(self.runset,self.actionlist)
             self.runthread.start()
 
+
     def load_scan(self,doreload=False):
         checklist = _check_for_data_files([self.make_prefix(m) for m in self.movelist])
         if not all(checklist):
             if not any(checklist):
                 raise IOError('Files not found, cannot load data.')
-            else:
+            elif self.continuescan:
+                raise IOError('Partial files found, continuescan set true, attempting to continue...')
+            elif not self.continuescan:
                 raise Exception('Some files found, scan partially complete. \n \
                     Set continuescan attribute to True to resume scan.')
+
         else:
             if self.runset.dataruns is None or doreload:
                 self.runset.dataruns=[]
@@ -78,6 +82,20 @@ class ScanAndAction:
             runparam={self.movetype:movevalue},**self.kwargs))
 
 class AngleScan:
+    """Takes scans at a series of sample angle positions and stores the 
+    dataruns in a runset object.
+
+    Example:
+        AngleScan('30s',[-15,15],5,'6.20.17.ZnS_ExampleAngleScan')
+        Will run 30second scans at positions [-15,-10,-5,...,10,15]
+        and store under runset prefix '6.20.17.ZnS_ExampleAngleScan'
+
+    Args:
+        duration (str): length of each scan as a string (e.g. '30s','2m')
+        anglerange ([float,float]): range of angles to step through (e.g. [30,60])
+        stepsize (float): step size between scans
+        prefix (str): prefix of dataruns saved by the runset
+    """
 
     def __init__(self, duration, anglerange, stepsize, prefix, **kwargs):
         self.duration = duration
@@ -118,9 +136,43 @@ class AngleScan:
         self.scanandaction.runthread.stopevent.set()
 
     def insert_scan(self,movevalue):
+        self.anglelist.append(movevalue)
         self.scanandaction.insert_scan(movevalue)
 
+    def plot_scans(self, **kwargs):
+        [x.plot_lineout(show=False,**kwargs) for x in self.runset]
+        camcontrol.plt.show()
+
+    def check_scan_status(self):
+        import humanfriendly
+        currentscans = len(self.runset.dataruns)
+        numscans = len(self.anglelist)
+        timeleft = humanfriendly.parse_timespan(self.duration) - self.runset.dataruns[-1].acquisition_time()
+        if currentscans < numscans:
+            print("On scan ",str(currentscans)," of ",str(numscans),'.')
+            print("{:.0f}".format(timeleft)," seconds left in current scan.")
+        elif currentscans == numscans:
+            if timeleft > 0:
+                print("On scan ",str(currentscans)," of ",str(numscans),'.')
+                print("{:.0f}".format(timeleft)," seconds left in current scan.")
+            else:
+                print("Scan complete!")
+
 class CameraScan:
+    """Takes scans at a series of camera  positions and stores the 
+    dataruns in a runset object.
+
+    Example:
+        CameraScan('300s',[0.25,2.25],0.25,'6.20.17.ZnS_ExampleCameraScan')
+        Will run 30second scans at positions [0.25,0.5,0.75,...,2,2.25]
+        and store under runset prefix '6.20.17.ZnS_ExampleCameraScan'
+
+    Args:
+        duration (str): length of each scan as a string (e.g. '30s','2m')
+        anglerange ([float,float]): range of camera positions to step through (e.g. [0,1.75])
+        stepsize (float): step size between scans
+        prefix (str): prefix of dataruns saved by the runset
+    """
 
     def __init__(self, duration, distancerange, stepsize, prefix, **kwargs):
         self.duration = duration
@@ -148,7 +200,35 @@ class CameraScan:
         self.scanandaction.runthread.stopevent.set()
 
     def insert_scan(self,movevalue):
+        self.distlist.append(movevalue)
         self.scanandaction.insert_scan(movevalue)
+
+    def plot_scans(self, **kwargs):
+        [x.plot_lineout(show=False,**kwargs) for x in self.runset]
+        camcontrol.plt.show()
+
+    def check_scan_status(self):
+        import humanfriendly
+        currentscans = len(self.runset.dataruns)
+        numscans = len(self.distlist)
+        timeleft = humanfriendly.parse_timespan(self.duration) - self.runset.dataruns[-1].acquisition_time()
+        if currentscans < numscans:
+            print("On scan ",str(currentscans)," of ",str(numscans),'.')
+            print("{:.0f}".format(timeleft)," seconds left in current scan.")
+        elif currentscans == numscans:
+            if timeleft > 0:
+                print("On scan ",str(currentscans)," of ",str(numscans),'.')
+                print("{:.0f}".format(timeleft)," seconds left in current scan.")
+            else:
+                print("Scan complete!")
+
+    def plot_fwhm_vs_pos(self,**kwargs):
+        from xraycam.camalysis import fwhm_2d
+        fwhmpos = np.array([[x.runparam['mm_camera'],fwhm_2d(x.get_lineout(**kwargs))] for x in self.runset])
+        camcontrol.plt.plot(*fwhmpos.transpose(),label='FWHM vs Pos')
+        camcontrol.plt.xlabel('mm_camera')
+        camcontrol.plt.ylabel('FWHM (eV or bins)')
+        camcontrol.plt.show()
 
 class ScanThread(threading.Thread):
     """
@@ -168,7 +248,7 @@ class ScanThread(threading.Thread):
         for el in self.actionlist:
             if not self.stopevent.is_set():
                 action, datarun = el
-                print('moving before scan')
+                print('setting up scan (e.g. moving if motor scan)')
                 action()
                 dr = datarun()
                 print('scan started')

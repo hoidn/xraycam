@@ -168,7 +168,7 @@ class ScanThread(threading.Thread):
         for el in self.actionlist:
             if not self.stopevent.is_set():
                 action, datarun = el
-                print('moving before scan')
+                print('setting up scan (e.g. moving if motor scan)')
                 action()
                 dr = datarun()
                 print('scan started')

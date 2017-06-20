@@ -249,6 +249,9 @@ class RunSet:
         self.totallineoutdict = {}
         self.totaldata = None
 
+    def __iter__(self):
+        return self.dataruns.__iter__()
+
     def from_multiple_exposure(self,*args,**kwargs):
         from xraycam import async
         self.dataruns = async.IterThread(RunSequence(*args, **kwargs))
