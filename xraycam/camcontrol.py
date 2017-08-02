@@ -455,7 +455,7 @@ class Frame:
             name =  _longest_common_substring(self.name, other.name)
         else:
             name = ''
-        new = Frame(array = self.data, name = name)
+        new = Frame(array = self.data, name = name, rotate=True, photon_value=self.photon_value)
         new.data = new.data + other.data
         new.time = self.time + other.time
         return new
