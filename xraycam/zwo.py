@@ -14,6 +14,7 @@ from . import declustering
 PKG_NAME = __name__.split('.')[0]
 
 NCORES = 1
+CAPTURE = 'oacapture'
 
 # communication with ZWO camera capture program
 context = zmq.Context()
@@ -44,7 +45,10 @@ def make_worker_function(threshold, window_min = 0, window_max = 255, decluster 
         new[new < window_min] = 0
         return new
     def worker_process():
-        zmq_comm.launch_worker(worker_function)
+        if CAPTURE == 'oacapture':
+            zmq_comm.launch_worker_oa(worker_function)
+        elif CAPTURE == 'zwopython':
+            zmq_comm.launch_worker(worker_function)
     return worker_process
 
 def launch_process(f):
