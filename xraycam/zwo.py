@@ -14,7 +14,7 @@ from . import declustering
 PKG_NAME = __name__.split('.')[0]
 
 NCORES = 1
-CAPTURE = 'oacapture'
+CAPTURE = 'zwopython'
 
 # communication with ZWO camera capture program
 context = zmq.Context()
