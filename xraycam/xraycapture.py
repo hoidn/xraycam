@@ -74,7 +74,7 @@ def capture_worker(flags = 0, copy = True, track = False):
             frame = camera.capture_video_frame()
             send_array(sender, frame, flags = flags, copy = copy, track = track)
     except KeyboardInterrupt:
-        logger.info('Camera worker receieved interrupt, stopping.')
+        logger.info('Camera worker received interrupt, stopping.')
     finally:
         camera.stop_video_capture()
         camera.close()
