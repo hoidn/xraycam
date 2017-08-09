@@ -6,6 +6,7 @@ from scipy.interpolate import UnivariateSpline
 from xraycam.camcontrol import _rebin_spectrum
 from scipy.ndimage.filters import gaussian_filter as gfilt
 from xraycam.camcontrol import plt
+import dill
 
 # @utils.memoize(timeout = None)
 def get_hot_pixels(darkrun = None, threshold = 0):
@@ -304,13 +305,57 @@ class CalibPeakDrift:
 def exponential_func(t,tau,A,offset):
         return A*(1-np.exp(-t/tau))+offset
 
-def find_files(searchlist):
+def find_files(prefixguess,directory='cache'):
     import re, os
-    regex = r'('+r'.*'.join(searchlist)+r'.*)_final_array'
-    matches = []
-    pattern = re.compile(regex)
-    for file in os.listdir('cache'):
-        m = pattern.match(file)
-        if m is not None:
-            matches.append(m.groups(0))
-    return sorted(matches)
+    import pandas as pd
+    
+    reg = re.compile(r'(.*'+prefixguess+r'.*)_final_array')
+    matches=[]
+    for file in os.listdir(directory):
+        m = reg.match(file)
+        if m:
+            if m.group(1) not in matches:
+                matches.append(m.group(1))
+    
+    prefixes = []
+    runsetreg = re.compile(r'(.*)_\d+')
+    for match in matches:
+        m = runsetreg.match(match)
+        if m:
+            mentry = {'prefix':m.group(1),'type':'runset'}
+            if mentry not in prefixes:
+                prefixes.append(mentry)
+        else:
+            mentry = {'prefix':match,'type':'single-run'}
+            if mentry not in prefixes:
+                prefixes.append(mentry)
+                
+    def count_entries(prefix,entries):
+        i=0
+        for e in entries:
+            if prefix in e:
+                i+=1
+        return i
+                
+    for d in prefixes:
+        d['numruns']=count_entries(d['prefix'],matches)
+        
+    return pd.DataFrame(prefixes)
+
+def save_frame_object(frame,filename,directory='cache'):
+    with open(directory+'/'+filename,'wb') as f:
+        dill.dump(frame,f)
+def load_frame_object(filename,directory='cache'):
+    with open(directory+'/'+filename,'rb') as f:
+        frame = dill.load(f)
+    return frame
+
+def process_final_frame(prefix,number_runs,norunparam=True,dashinfilename=True,**kwargs):
+    finalrunset = camcontrol.RunSet()
+    for i in range(number_runs):
+        if dashinfilename:
+            formatstr = '_{}'
+        else:
+            formatstr = '{}'
+        finalrunset.insert(camcontrol.DataRun(run_prefix=prefix+formatstr.format(i),norunparam=norunparam,**kwargs))
+    return finalrunset.get_total_frame()
