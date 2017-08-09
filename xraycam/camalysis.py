@@ -359,3 +359,8 @@ def process_final_frame(prefix,number_runs,norunparam=True,dashinfilename=True,*
             formatstr = '{}'
         finalrunset.insert(camcontrol.DataRun(run_prefix=prefix+formatstr.format(i),norunparam=norunparam,**kwargs))
     return finalrunset.get_total_frame()
+
+def _take_lineout_erange(lineout,erange):
+    energies, intensities = lineout
+    indices = (energies > erange[0]) & (energies < erange[1])
+    return np.array([energies[indices],intensities[indices]])
