@@ -314,3 +314,8 @@ def find_files(searchlist):
         if m is not None:
             matches.append(m.groups(0))
     return sorted(matches)
+
+def _take_lineout_erange(lineout,erange):
+    energies, intensities = lineout
+    indices = (energies > erange[0]) & (energies < erange[1])
+    return np.array([energies[indices],intensities[indices]])

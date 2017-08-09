@@ -143,9 +143,10 @@ def _plot_lineout(pixeli, intensity, show = False, label = '', error_bars = Fals
     return intensity/norm
 
 def _plot_histogram(values,xmin=5,xmax=255,show=True,binsize=1.000001,calib=[None,None],label='histogram'):
-    values[values < xmin] = 0
-    values[values > xmax] = 0
-    data = values[values>0]
+    xvalues = copy.deepcopy(values)
+    xvalues[xvalues < xmin] = 0
+    xvalues[xvalues > xmax] = 0
+    data = xvalues[xvalues>0]
     slope = 1
     if calib[0] is not None:
         if calib[1] is None:

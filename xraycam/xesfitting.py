@@ -4,6 +4,7 @@ import plotly.offline as offline
 import plotly.graph_objs as go
 import numpy as np
 from xraycam.camcontrol import plt
+from xraycam.camalysis import _take_lineout_erange
 
 def norm(y,mode='peak'):
     if mode=='peak':
@@ -35,10 +36,10 @@ def fit_resid_plotly(lmfitoutput,xvalues,xrange=None,poisson=False,comptraces=[]
         data.insert(1,poissontrace4)
         data.append(poissontrace3)
     
-    residtrace = go.Scatter(x=xvalues,y=lmfitoutput.residual,xaxis='x',yaxis='y',mode='lines+markers',name='residuals',
+    residtrace = go.Scatter(x=lmfitoutput.data,y=lmfitoutput.residual,xaxis='x',yaxis='y',mode='lines+markers',name='residuals',
                            marker=dict(size=5),line=dict(width=1,
                                 color='rgb(49,54,149)'))
-    fittrace = go.Scatter(x=xvalues,y=lmfitoutput.best_fit,xaxis='x',yaxis='y2',name='fit',
+    fittrace = go.Scatter(x=xvalues,y=lmfitoutput.out.eval(x=xvalues),xaxis='x',yaxis='y2',name='fit',
                          line=dict(color='rgba(0,0,0,0.7)'))
 
     if joined:
@@ -372,10 +373,14 @@ examplerefpeakshapes=collections.OrderedDict([
 
 class kalpha_linear_combination_fit:
 
-    def __init__(self,lineout,sample='sample',refpeakshapes=None,linbg=True,runoninit=False):
+    def __init__(self,lineout,sample='sample',refpeakshapes=None,linbg=True,runoninit=False, fitregion=None):
         self.sample=sample
         self.lineoutx=lineout[0]
         self.lineouty=lineout[1]
+        if not fitregion:
+            self.flineoutx, self.flineouty = self.lineoutx, self.lineouty
+        else:
+            self.flineoutx, self.flineouty =_take_lineout_erange(lineout,fitregion)
         self.refpeakshapes = refpeakshapes
         self.linbg = linbg
         self.make_model()
@@ -409,7 +414,7 @@ class kalpha_linear_combination_fit:
             self.pars['linbg_intercept'].set(value=-list(self.refpeakshapes.items())[0][1]['mainpeakpos'])
 
     def do_fit(self,bgcomp=True):
-        self.out = self.model.fit(self.lineouty,self.pars,x=self.lineoutx)
+        self.out = self.model.fit(self.flineouty,self.pars,x=self.flineoutx)
         self.complist = collections.OrderedDict()
         components = self.out.eval_components()
         for k in self.refpeakshapes:
