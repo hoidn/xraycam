@@ -22,7 +22,7 @@ def fit_resid_plotly(lmfitoutput,xvalues,xrange=None,poisson=False,comptraces=[]
                                 color='rgba(31,120,180,.5)'),fillcolor='rgba(31,120,180,0.25)')
         poissontrace2=go.Scatter(x=xvalues,y=-np.sqrt(lmfitoutput.data),xaxis='x',yaxis='y',
                                  name='poisson-',mode='lines',fill='tozeroy',line=dict(
-                                color='rgba(31,120,180,.5)'),fillcolor='rgba(31,120,180,0.25)')
+                                color='rgba(31,120,180,.5)'),fillcolor='rgba(31,120,180,s0.25)')
         data.append(poissontrace2)
         data.append(poissontrace1)
 
@@ -36,10 +36,10 @@ def fit_resid_plotly(lmfitoutput,xvalues,xrange=None,poisson=False,comptraces=[]
         data.insert(1,poissontrace4)
         data.append(poissontrace3)
     
-    residtrace = go.Scatter(x=lmfitoutput.data,y=lmfitoutput.residual,xaxis='x',yaxis='y',mode='lines+markers',name='residuals',
+    residtrace = go.Scatter(x=xvalues,y=lmfitoutput.residual,xaxis='x',yaxis='y',mode='lines+markers',name='residuals',
                            marker=dict(size=5),line=dict(width=1,
                                 color='rgb(49,54,149)'))
-    fittrace = go.Scatter(x=xvalues,y=lmfitoutput.out.eval(x=xvalues),xaxis='x',yaxis='y2',name='fit',
+    fittrace = go.Scatter(x=xvalues,y=lmfitoutput.best_fit,xaxis='x',yaxis='y2',name='fit',
                          line=dict(color='rgba(0,0,0,0.7)'))
 
     if joined:
@@ -413,8 +413,11 @@ class kalpha_linear_combination_fit:
         if self.linbg:
             self.pars['linbg_intercept'].set(value=-list(self.refpeakshapes.items())[0][1]['mainpeakpos'])
 
-    def do_fit(self,bgcomp=True):
-        self.out = self.model.fit(self.flineouty,self.pars,x=self.flineoutx)
+    def do_fit(self,bgcomp=True,useweights=None):
+        if not useweights:
+            self.out = self.model.fit(self.flineouty,self.pars,x=self.flineoutx)
+        else:
+            self.out = self.model.fit(self.flineouty,self.pars,x=self.flineoutx,weights=np.sqrt(self.flineouty))
         self.complist = collections.OrderedDict()
         components = self.out.eval_components()
         for k in self.refpeakshapes:
@@ -514,97 +517,9 @@ class kalpha_linear_combination_fit:
         offline.iplot(fig,image=imagestr)
 
 
-        # if self.linbg:
-        #     rindex = -1
-        # else:
-        #     rindex = None
-        # for c in self.complist[:rindex]:
-        #     tot=tot+np.sum(c[1])
-
     def print_fit_summary(self):
         self.calc_contributions()
         fitbestvalues = self.out.best_values
         print('Oxidized Kalpha1: '+str(fitbestvalues['oxidized_1_center'])+' eV')
         print('Reduced Kalpha1: '+str(fitbestvalues['reduced_1_center'])+' eV')
 
-
-
-
-
-
-# Old version
-# class do_four_peak_fit:
-    
-#     def __init__(self,lineout):
-#         self.lineoutx=lineout[0]
-#         self.lineouty=lineout[1]
-#         self.voigt1 = models.VoigtModel(prefix='v1_')
-#         self.voigt2 = models.VoigtModel(prefix='v2_')
-#         self.voigt3 = models.VoigtModel(prefix='v3_')
-#         self.voigt4 = models.VoigtModel(prefix='v4_')
-#         self.linbg = models.LinearModel(prefix='bg_')
-#         self.model = self.voigt1+self.voigt2+self.voigt3+self.voigt4+self.linbg
-#         self.initialize_pars()
-#         self.reset_pars()
-#         self.complist=[]
-    
-#     def initialize_pars(self):
-#         self.pars=self.voigt1.make_params()
-#         self.pars.update(self.voigt2.make_params())
-#         self.pars.update(self.voigt3.make_params())
-#         self.pars.update(self.voigt4.make_params())
-#         self.pars.update(self.linbg.make_params())
-    
-#     def reset_pars(self):
-#         [self.pars[x].set(value=0.22) for x in [('v%d_sigma')%i for i in (1,2,3,4)]]
-#         #self.pars['v1_amplitude'].set(expr='v2_amplitude*0.5')
-#         self.pars['v2_sigma'].set(expr='v1_sigma')
-#         self.pars['v3_sigma'].set(expr='v1_sigma')
-#         self.pars['v4_sigma'].set(expr='v1_sigma')
-#         self.pars['v1_gamma'].set(vary=True)
-#         self.pars['v2_gamma'].set(expr='v1_gamma')
-#         self.pars['v3_gamma'].set(expr='v1_gamma')
-#         self.pars['v4_gamma'].set(expr='v1_gamma')
-#         self.pars['v1_gamma'].set(value=0.3)
-#         self.pars['v1_center'].set(value=2013)
-#         self.pars['v2_center'].set(value=2013.8)
-#         self.pars['v3_center'].set(value=2014.5-.8)
-#         self.pars['v4_center'].set(value=2014.5)
-#         self.pars['v1_amplitude'].set(value=max(self.lineouty)/4)
-#         self.pars['v2_amplitude'].set(value=max(self.lineouty)/2)
-#         self.pars['v3_amplitude'].set(value=max(self.lineouty)/4)
-#         self.pars['v4_amplitude'].set(value=max(self.lineouty)/2)
-#         self.pars['bg_intercept'].set(value=-2014)
-        
-#     def run_fit(self):
-#         self.out = self.model.fit(self.lineouty,self.pars,x=self.lineoutx)
-#         self.complist = np.array([[self.lineoutx,self.out.eval_components()[i]] for i in ('v1_','v2_','v3_','v4_','bg_')])
-    
-#     def plot_summary(self):
-#         plt.plot(self.lineoutx,self.lineouty,label='raw data')
-#         plt.plot(self.lineoutx,self.model.eval(self.pars,x=self.lineoutx),label='initial')
-#         try:
-#             plt.plot(self.lineoutx,self.out.best_fit,label='fit')
-#         except:
-#             plt.show()
-#         else:
-#             plt.show()
-        
-#     def residual_plot(self,save=False,**kwargs):
-#         fit_resid_plotly(self.out,self.lineoutx,poisson=1,comptraces=self.complist,save=save,**kwargs)
-        
-#     def spin_splitting(self):
-#         split12 = self.out.best_values['v2_center']-self.out.best_values['v1_center']
-#         split34 = self.out.best_values['v4_center']-self.out.best_values['v3_center']
-#         print('V1/V2 spin-split is: ',split12)
-#         print('V3/V4 spin-split is: ',split34)
-        
-#     def oxid_split(self):
-#         split = self.out.best_values['v4_center']-self.out.best_values['v2_center']
-#         print('split between reduced/oxidized component is: ',split)
-        
-#     def oxid_red_complist(self):
-#         allcomps = np.array([[self.lineoutx,self.out.eval_components()[i]] for i in ('v1_','v2_','v3_','v4_','bg_')])
-#         comp1 = np.array([allcomps[0][0],allcomps[0][1]+allcomps[1][1]])
-#         comp2 = np.array([allcomps[2][0],allcomps[2][1]+allcomps[3][1]])
-#         self.complist=[comp1,comp2,allcomps[-1]]
