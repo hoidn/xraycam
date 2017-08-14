@@ -7,6 +7,7 @@ from xraycam.camcontrol import _rebin_spectrum
 from scipy.ndimage.filters import gaussian_filter as gfilt
 from xraycam.camcontrol import plt
 import dill
+from lmfit import models
 
 # @utils.memoize(timeout = None)
 def get_hot_pixels(darkrun = None, threshold = 0):
@@ -364,3 +365,35 @@ def _take_lineout_erange(lineout,erange):
     energies, intensities = lineout
     indices = (energies > erange[0]) & (energies < erange[1])
     return np.array([energies[indices],intensities[indices]])
+
+def _linear_background_subtraction(lineout,excluderegions,show=False):
+    #remove exlusion regions
+    bglineoutx,bglineouty = np.copy(lineout)
+    for exclude in excluderegions:
+        bgreg=(bglineoutx<exclude[0])|(bglineoutx>exclude[1])
+        bglineoutx = bglineoutx[bgreg]
+        bglineouty = bglineouty[bgreg]
+    
+    #linear fit and subtract
+    lm = models.LinearModel()
+    pars = lm.guess(bglineouty,x=bglineoutx)
+    out = lm.fit(bglineouty,x=bglineoutx)
+    lineoutx = lineout[0]
+    lineouty = lineout[1]-out.eval(x=lineout[0])
+
+    
+    if show:
+        #gather subtracted regions
+        exclusions=[]
+        for exclude in excluderegions:
+            exclusions.append(_take_lineout_erange(lineout,exclude))
+        plt.plot(*lineout,label='orig')
+        for e in exclusions:
+            plt.plot(*e,label='excluded-regions')
+        plt.plot(bglineoutx,out.best_fit,label='linear-bg')
+        plt.plot(lineoutx,lineouty,label='bg-sub')
+        plt.figures[0].traces[-1]['visible']='legendonly'
+        plt.show()
+    
+    return np.array([lineoutx,lineouty])
+    

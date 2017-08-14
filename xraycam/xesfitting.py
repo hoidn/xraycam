@@ -77,6 +77,72 @@ def fit_resid_plotly(lmfitoutput,xvalues,xrange=None,poisson=False,comptraces=[]
         imagestr=None
     offline.iplot(fig,image=imagestr)
 
+
+#Ugh copy/pasting, but need to maintain backwards compatibility...
+def _residuals_plot(lmfitoutput,rawdata,xvalues,fxvalues,xrange=None,poisson=False,comptraces=[],complabels=[],save=False,joined=False):
+    data=[]
+
+    if poisson:
+        poissontrace1=go.Scatter(x=xvalues,y=np.sqrt(rawdata),xaxis='x',yaxis='y',
+                                 name='poisson+',mode='lines',fill='tozeroy',line=dict(
+                                color='rgba(31,120,180,.5)'),fillcolor='rgba(31,120,180,0.25)')
+        poissontrace2=go.Scatter(x=xvalues,y=-np.sqrt(rawdata),xaxis='x',yaxis='y',
+                                 name='poisson-',mode='lines',fill='tozeroy',line=dict(
+                                color='rgba(31,120,180,.5)'),fillcolor='rgba(31,120,180,s0.25)')
+        data.append(poissontrace2)
+        data.append(poissontrace1)
+
+    if poisson == 2:
+        poissontrace3=go.Scatter(x=xvalues,y=2*np.sqrt(rawdata),xaxis='x',yaxis='y',
+                                 name='poisson2+',mode='lines',fill='tonexty',line=dict(
+                                color='rgba(227,26,28,.5)'),fillcolor='rgba(227,26,28,0.25)')
+        poissontrace4=go.Scatter(x=xvalues,y=-2*np.sqrt(rawdata),xaxis='x',yaxis='y',
+                                 name='poisson2-',mode='lines',fill='tonexty',line=dict(
+                                color='rgba(227,26,28,.5)'),fillcolor='rgba(227,26,28,0.25)')
+        data.insert(1,poissontrace4)
+        data.append(poissontrace3)
+    
+    residtrace = go.Scatter(x=fxvalues,y=lmfitoutput.residual,xaxis='x',yaxis='y',mode='lines+markers',name='residuals',
+                           marker=dict(size=5),line=dict(width=1,
+                                color='rgb(49,54,149)'))
+    fittrace = go.Scatter(x=xvalues,y=lmfitoutput.eval(x=xvalues),xaxis='x',yaxis='y2',name='fit',
+                         line=dict(color='rgba(0,0,0,0.7)'))
+
+    if joined:
+        datamode = 'lines+markers'
+    else:
+        datamode = 'markers'
+    datatrace = go.Scatter(x=xvalues,y=rawdata,xaxis='x',yaxis='y2',name='data',mode=datamode,
+                          marker = dict(size=5,color='rgba(200,0,0,0.8)'))
+
+    for trace in[residtrace,datatrace,fittrace]:
+        data.append(trace)
+    
+    if comptraces is not []:
+        i=0
+        if not complabels:
+            complabels=['comp%d'% j for j in range(len(comptraces))]
+        #for tr in reversed(comptraces):
+        for tr in comptraces:
+            data.append(go.Scatter(x=tr[0],y=tr[1],xaxis='x',yaxis='y2',name=complabels[i]))#,visible='legendonly'))
+            i+=1
+    
+    layout=go.Layout(
+        xaxis=dict(domain=[0,1],anchor='y2',title='Energy(ev)',range=xrange),
+        yaxis=dict(domain=[0.7,1],title='residuals'),
+        yaxis2=dict(domain=[0,0.68],title='intensity'),
+        height=600)
+
+    if poisson == 1:
+        data=data[::-1]
+
+    fig=go.Figure(data=data,layout=layout)
+    if save:
+        imagestr='svg'
+    else:
+        imagestr=None
+    offline.iplot(fig,image=imagestr)
+
 def splitting(lmfitout,v1str,v2str):
     v1center = lmfitout.best_values[v1str+'_center']
     v2center = lmfitout.best_values[v2str+'_center']
@@ -142,7 +208,7 @@ class do_peak_fit:
         plt.plot(self.lineoutx,self.lineouty,label='data')
         plt.plot(self.lineoutx,self.model.eval(self.pars,x=self.lineoutx),label='initial')
         try:
-            plt.plot(self.lineoutx,self.out.best_fit,label='fit')
+            plt.plot(self.lineoutx,self.out.eval(self.lineoutx),label='fit')
         except:
             plt.show()
         else:
@@ -413,18 +479,18 @@ class kalpha_linear_combination_fit:
         if self.linbg:
             self.pars['linbg_intercept'].set(value=-list(self.refpeakshapes.items())[0][1]['mainpeakpos'])
 
-    def do_fit(self,bgcomp=True,useweights=None):
+    def do_fit(self,useweights=None):
         if not useweights:
             self.out = self.model.fit(self.flineouty,self.pars,x=self.flineoutx)
         else:
-            self.out = self.model.fit(self.flineouty,self.pars,x=self.flineoutx,weights=np.sqrt(self.flineouty))
+            self.out = self.model.fit(self.flineouty,self.pars,x=self.flineoutx,weights=1/np.sqrt(np.abs(self.flineouty)))
         self.complist = collections.OrderedDict()
-        components = self.out.eval_components()
+        components = self.out.eval_components(x=self.lineoutx)
         for k in self.refpeakshapes:
             self.complist[k]=[self.lineoutx,components[k+'_1_']+components[k+'_2_']]
             #self.complist.append([self.lineoutx,components[k+'_1_']+components[k+'_2_']])
 
-        if bgcomp:
+        if self.linbg:
             self.complist['linbg']=[self.lineoutx,components['linbg_']]
             #self.complist.append([self.lineoutx,components['linbg_']])
 
@@ -448,20 +514,21 @@ class kalpha_linear_combination_fit:
                     print(k,' at ','{:6.2f}'.format(v))
 
     def residuals_plot(self,poisson=True,save=False,**kwargs):
-        fit_resid_plotly(
-            self.out,xvalues=self.lineoutx,
+        _residuals_plot(
+            self.out,rawdata=self.lineouty,xvalues=self.lineoutx,fxvalues=self.flineoutx,
             comptraces=list(self.complist.values()),poisson=poisson,
             save=save,complabels=list(self.complist.keys()),**kwargs)
 
-    def plot_summary(self):
+    def plot_summary(self,show=True):
         plt.plot(self.lineoutx,self.lineouty,label='data')
         plt.plot(self.lineoutx,self.model.eval(self.pars,x=self.lineoutx),label='initial')
         try:
-            plt.plot(self.lineoutx,self.out.best_fit,label='fit')
+            plt.plot(self.lineoutx,self.out.eval(x=self.lineoutx),label='fit')
         except:
             plt.show()
         else:
-            plt.show()
+            if show:
+                plt.show()
 
     def save_fit_csv(self,filename):
         savelist = [self.lineoutx,self.lineouty,self.out.best_fit]
@@ -476,7 +543,7 @@ class kalpha_linear_combination_fit:
     def pretty_plot_fit(self,xrange=None,save=False,joined=False):
         data=[]
 
-        fittrace = go.Scatter(x=self.lineoutx,y=self.out.best_fit,xaxis='x',yaxis='y',name='fit',
+        fittrace = go.Scatter(x=self.lineoutx,y=self.out.eval(x=self.lineoutx),xaxis='x',yaxis='y',name='fit',
                              line=dict(color='rgba(0,0,0,0.7)'))
 
         if joined:
@@ -517,9 +584,10 @@ class kalpha_linear_combination_fit:
         offline.iplot(fig,image=imagestr)
 
 
-    def print_fit_summary(self):
+    def print_fit_summary(self,verbose=False):
         self.calc_contributions()
         fitbestvalues = self.out.best_values
-        print('Oxidized Kalpha1: '+str(fitbestvalues['oxidized_1_center'])+' eV')
-        print('Reduced Kalpha1: '+str(fitbestvalues['reduced_1_center'])+' eV')
+        if verbose:
+            print('Oxidized Kalpha1: '+str(fitbestvalues['oxidized_1_center'])+' eV')
+            print('Reduced Kalpha1: '+str(fitbestvalues['reduced_1_center'])+' eV')
 
