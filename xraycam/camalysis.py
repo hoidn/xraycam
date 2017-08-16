@@ -1,4 +1,3 @@
-# from . import detconfig
 from . import camcontrol
 from . import utils
 import numpy as np
@@ -9,7 +8,6 @@ from xraycam.camcontrol import plt
 import dill
 from lmfit import models
 
-# @utils.memoize(timeout = None)
 def get_hot_pixels(darkrun = None, threshold = 0):
     """
     darkrun : camcontrol.DataRun
@@ -70,7 +68,6 @@ def add_energy_scale(lineout,known_energy,known_bin='peak',rebinparam=1,camerain
             indexfromcenter=-indexfromcenter # if camera gets flipped upside down, just reverse the indices
     return (energy_from_x_position(calc_bragg_angle(known_energy,braggorder),indexfromcenter,rebinparam,braggorder),lineout)
     
-# def fwhm_ev(arr2d,fwhm_smooth=2):
 def fwhm_2d(arr2d,fwhm_smooth=2):
     """
     Given a 2d-array of [x's,y's] calculate fwhm of peak in the lineout.
@@ -80,32 +77,6 @@ def fwhm_2d(arr2d,fwhm_smooth=2):
     spline = UnivariateSpline(x, y - np.max(y)/2, s = 0)
     r1, r2 = spline.roots()
     return r2 - r1
-
-# def plot_with_energy_scale(datarun,known_energy,yrange=[0,-1],xrange=[0,-1],rebin=1,show=True,peaknormalize=False, label=None,calcfwhm=False,parabolic=False,**kwargs):
-#     if parabolic == False:
-#         lineout = np.sum(_reorient_array(datarun.get_array())[yrange[0]:yrange[1],xrange[0]:xrange[1]],axis=0)/datarun.photon_value
-#     else:
-#         lineout = get_parabolic_lineout(_reorient_array(datarun.get_array()),yrange=yrange)[xrange[0]:xrange[1]] 
-#     if rebin != 1: #rebin using oliver's rebin_spectrum function
-#         lineout = _rebin_spectrum(np.array(range(len(lineout))),lineout,rebin)[1]
-#     if peaknormalize:
-#         lineout = lineout / max(lineout)
-#     lineout_energyscale=add_energy_scale(lineout,known_energy,rebinparam=rebin,**kwargs)
-#     if label == None and calcfwhm == False:
-#         label=datarun.prefix
-#     elif label == None and calcfwhm == True:
-#         s=' - '
-#         label=s.join((str(datarun.prefix),str(fwhm_ev(lineout_energyscale,3))))
-#     elif label != None and calcfwhm == True:
-#         s=' - '
-#         label=s.join((label,str(fwhm_ev(lineout_energyscale))))
-#     camcontrol.plt.plot(*lineout_energyscale,label=label)
-#     if show == True:
-#         camcontrol.plt.show()
-
-def focus_ZvsFWHM_plot(dataruntuple,known_energy,**kwargs):
-    camcontrol.plt.plot(*list(zip(*[(x.run.z,fwhm_datarun(x.run,known_energy,**kwargs)) for x in dataruntuple])),label='fwhm v z')
-    camcontrol.plt.show()
 
 def center_of_masses(arr2d):
     def _cm(arr1d):
@@ -124,79 +95,6 @@ def cmplot(datarun, smooth=0,show=True):
         camcontrol.plt.show()
 
     return np.array([x,y])
-
-def fwhm_vs_row_plot(datarun,step=100,**kwargs):
-    camcontrol.plt.plot(*list(zip(*[(i+step/2,fwhm_ev(datarun.get_frame().get_lineout(yrange=[i,i+step],**kwargs))) for i in range(0,2000,step)])),label='fwhm v row')
-    camcontrol.plt.show()
-
-# def fwhm_vs_row_plot(datarun,step=100):
-#     camcontrol.plt.plot(*list(zip(*[(i+step/2,fwhm_datarun(datarun.run,2300,xrange=[i,i+step],rebin=2)) for i in range(0,2000,step)])),label='fwhm v row')
-#     camcontrol.plt.show()
-    
-# def focus_ThetavsFWHM_plot(dataruntuple,known_energy,**kwargs):
-#     camcontrol.plt.plot(*list(zip(*[(x.run.theta,fwhm_datarun(x.run,known_energy,**kwargs)) for x in 
-#                      dataruntuple])),label='fwhm v z')
-#     camcontrol.plt.show()
-
-def cropping_tool(datarun,step,known_energy=2014,calcfwhm=True,**kwargs):
-    [plot_with_energy_scale(datarun,known_energy,label='['+','.join((str(i),str(i+step)))+']',yrange=[i,i+step],
-                            show=False,calcfwhm=calcfwhm,peaknormalize=True,**kwargs) for i in range(0,2000,step)]
-    camcontrol.plt.show()
-# Below are functions which support the parabolic fitting.
-def _reorient_array(arr2d):
-    """Take output from the get_array() method for dataruns from the new camera,
-    and reorient them to match what our usual analysis code expects."""
-    return np.transpose(arr2d[::,::-1])
-
-
-def parabolic_sort(a, b, shape = (1024, 1280)):
-    """
-    Returns: z, (rowsort, colsort)
-    
-    z : 2d numpy array of shape `shape` with values x**2 + b * x + c,
-    where x is row index.
-    rowsort : sequence of row indices that sort z
-    colsort : sequence of column indices that sort z
-    """
-    x, y = np.indices(shape, dtype = 'int')
-    z = ((a * (x**2)) + (b * x) + y)
-    return z, np.unravel_index(
-                np.argsort(z.ravel()), z.shape)
-
-def quadfit(arr2d, smooth = 5):
-    """
-    Return the second- and first-order coefficients for a parabolic
-    fit to array of center of mass values of the rows of arr2d.
-    """
-    y = gfilt(center_of_masses(arr2d), smooth)# - np.percentile(filtered, 1)) *Note: changed gfilt to act on y instead of on 2d array.  Seems to produce better parabolas.
-    x = np.arange(len(y))
-    good = np.where(np.isfinite(y))[0] #note to self: is there assumption here that cutting out non-finite elements won't appreciably change the curvature?
-    a, b, c, = np.polyfit(x[good], y[good], 2)
-    # For some reason a factor of -1 is needed
-    return a, b, c
-
-def get_parabolic_lineout(arr2d, nbins = None, fitregionmode = 'cm' , fitregionx = [0,-1], fitregiony = [0,-1],yrange=[0,-1],**kwargs):
-    """Return lineout taken using parabolic bins"""
-    # Fit only to specific region
-    if fitregionmode != 'cm':
-        a, b, _ = quadfit(arr2d[fitregiony[0]:fitregiony[1],fitregionx[0]:fitregionx[1]])
-    else: 
-        # Fit around center of mass to get better parabolas
-        cm = np.mean(center_of_masses(arr2d))
-        a, b, _ = quadfit(arr2d[fitregiony[0]:fitregiony[1],int(cm-150):int(cm+150)])
-    if yrange != [0,-1]: 
-        # crop the region in the lineout, but with parabolic parameters from the (possibly) different fitregion
-        arr2d = arr2d[yrange[0]:yrange[1],:]
-    num_rows, num_cols = arr2d.shape
-    if nbins is None:
-        nbins = num_cols
-    def chunks():
-        """Return array values grouped into chunks, one per bin"""
-        increment = int(num_rows * (num_cols/nbins))
-        _, sort_indices = parabolic_sort(a, b, arr2d.shape)
-        sort_data = arr2d[sort_indices].ravel()
-        return [sort_data[i:i + increment] for i in range(0, len(sort_data), increment)]
-    return np.array(list(map(np.sum, chunks())))
 
 def get_peaks(lineout,interp=True,**kwargs):
     """Get location of peaks using PeakUtils package.
@@ -228,38 +126,6 @@ def get_peaks(lineout,interp=True,**kwargs):
             peaks_y.append(a)
 
     return np.array([peaks_x,peaks_y])
-
-def anglecounts(runlist):
-    thetalist = [x.theta for x in runlist]
-    countlist = [x.counts_per_second() for x in runlist]
-    from xraycam.camcontrol import plt
-    plt.plot(*[[thetalist[i] for i in np.argsort(thetalist)],[countlist[i] for i in np.argsort(thetalist)]], label='counts vs angle')
-    plt.xlabel('theta (deg)')
-    plt.ylabel('counts/sec')
-    plt.show()
-
-# def peaklocation_vs_theta(datarunlist,dosort=True,show=True,usetheta=True,useenergy=True,interp=True):
-#     if usetheta:
-#         thetalist = [x.run.theta for x in datarunlist]
-#     else:
-#         thetalist = np.arange(len(datarunlist))
-#     if useenergy:
-#         energy = (2307,400)
-#     else:
-#         energy = (None, None)
-#     peaklist = [get_peaks(x.run.get_frame().get_lineout(energy=energy),interp=interp)[0,0] for x in datarunlist]
-#     xylist = np.array([thetalist,peaklist])
-#     if dosort:
-#         xylist = xylist.T[np.argsort(thetalist)].T
-#     plt.plot(*xylist,label='')
-#     if usetheta:
-#         plt.xlabel('theta (deg)')
-#     else:
-#         plt.xlabel('run order')
-#     plt.ylabel('peaklocation (eV)')
-#     if show:
-#         plt.show()
-#     return xylist
 
 def makerange(w,s):
     return [[i,i+w] for i in np.arange(0,1936-w,s)]
@@ -346,6 +212,7 @@ def find_files(prefixguess,directory='cache'):
 def save_frame_object(frame,filename,directory='cache'):
     with open(directory+'/'+filename,'wb') as f:
         dill.dump(frame,f)
+
 def load_frame_object(filename,directory='cache'):
     with open(directory+'/'+filename,'rb') as f:
         frame = dill.load(f)

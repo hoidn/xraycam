@@ -2,16 +2,15 @@ import zmq
 import time
 import dill
 import humanfriendly
+import json
 
 from multiprocess import Process
 from threading import Thread
 import os
 
 from . import zmq_comm
-from . import utils
 from . import declustering
-
-PKG_NAME = __name__.split('.')[0]
+from . import config
 
 NCORES = 1
 CAPTURE = 'zwopython'
@@ -26,7 +25,7 @@ def cache_put(obj, key = None, cachedir = 'cache/'):
     if not os.path.isdir(cachedir):
         os.makedirs(cachedir)
     if key is None:
-        key = utils.hash_obj(obj)
+        raise ValueError("Need cache key to write to cache.")
     with open(cachedir + '/' + key, 'wb') as f:
         dill.dump(obj, f)
 
@@ -74,92 +73,142 @@ def init_workers():
     """
     Start a dummy worker process that keeps up with frames from the ventilator.
     """
-    loc = locals()
-    workers = [launch_process(make_worker_function(0, decluster = False)) for n in range(NCORES)]
+    global workers
+    workers = [launch_process(make_worker_function(0, decluster = False)) 
+                for n 
+                in range(NCORES)]
+    global sink
+    sink = launch_process(sink_process)
+
+def shutdown_workers():
+    for w in workers:
+        w.terminate()
+    sink.terminate()
+
+def replace_workers(self, worker_function):
+    """
+    Replace all current workers by processes running worker_function.
+    """
+    # Terminate and replace the current worker processes
+    new_workers = []
+    def replace_worker():
+        new_workers.append(launch_process(worker_function))
+        old = workers.pop()
+        old.terminate()
+        
+    while workers:
+        replace_worker()
+    while new_workers:
+        workers.append(new_workers.pop())
+
+def _validate_savedir():
+    #Ensure save configuration valid
+    if not os.path.isdir(config.saveconfig['Directory']):
+        raise IOError('Save directory does not exist.  Check saveconfig.')
 
 class ZRun:
     """
     TODO.
     """
-    def __init__(self, run_prefix = '', runparam = {}, window_min = 0,
-            window_max = 255, threshold = 10, decluster = True, htime = None, norunparam = False, loadonly = False):
-            self.name = run_prefix
-            if norunparam:
-                self.attrs = ['_time_start', 'initial_array', '_total_time', '_final_array']
+    def __init__(self, run_prefix = '', window_min = 0, window_max = 255, 
+        threshold = 0, decluster = True, htime = None, loadonly = False, 
+        saveonstop = True, photon_value = 1):
+
+        _validate_savedir()
+        
+        self.name = run_prefix
+        self.window_min = window_min
+        self.window_max = window_max
+        self.threshold  = threshold
+        self.decluster = decluster
+        self.htime = htime
+        self.loadonly = loadonly
+        self.saveonstop = saveonstop
+
+        try:
+            self.load()
+            print ("Run loaded from disk.")
+
+        except FileNotFoundError:
+            if not loadonly:
+                self._time_start = time.time()
+
+                worker_function = make_worker_function(threshold, window_min = window_min,
+                    window_max = window_max, decluster = decluster)
+
+                # Kill the old workers and launch new ones
+                replace_workers(worker_function)
+
+                self.initial_array = self.get_array()
+
+
+            if duration is not None:
+                def timeit(e):
+                    print("starting acquisition")
+                    e.wait(duration)
+                    if not e.is_set():
+                        self.stop()
+                        print("stopped acquisition")
+                self.stopevent = Event()                      
+                t_thread = Thread(target = timeit, args = (self.stopevent,))
+                t_thread.start()
             else:
-                self.attrs = ['_time_start', 'initial_array', '_total_time', '_final_array','_run_parameters']
-            # TODO: entire dict in one file
-            try:
-                attrs = self.attrs
-                keys = [run_prefix + a for a in attrs]
-                values = [cache_get(k, cachedir = 'cache/') for k, a in zip(keys, attrs)]
-                for a, v in zip(attrs, values):
-                    self.__dict__[a] = v
-                print ("Loaded from cache.")
-            # Do an actual data collection
-            except FileNotFoundError:
-                if not loadonly:
-                    self._time_start = time.time()
-                    self.initial_array = self.get_array()
-                    self._run_parameters = runparam
-
-                    worker_function = make_worker_function(threshold, window_min = window_min,
-                        window_max = window_max, decluster = decluster)
-
-                    # Kill the old workers and launch new ones
-                    self.replace_workers(worker_function)
-
-                    if htime is not None:
-                        def timeit():
-                            print( "starting acquisition")
-                            time.sleep(humanfriendly.parse_timespan(htime))
-                            self.stop()
-                            print("stopped acquisition")
-                        t_thread = Thread(target = timeit, args = ())
-                        t_thread.start()
-                else:
-                    print("Loadonly set true, but file not found in cache.")
-
-
-    def replace_workers(self, worker_function):
-        """
-        Replace all current workers by processes running worker_function.
-        """
-        # Terminate and replace the current worker processes
-        new_workers = []
-        def replace_worker():
-            new_workers.append(launch_process(worker_function))
-            old = workers.pop()
-            old.terminate()
-            
-        while workers:
-            replace_worker()
-        while new_workers:
-            workers.append(new_workers.pop())
-        #loc['worker'] = launch_process(worker_function)
-
+                print("Loadonly set true, but file not found in save directory.")
 
     def stop(self):
-        """
-        Stop the acquisition.
+        """Stop the acquisition.
+
+        The run parameters (name, time, keywords) and
+        resulting array are written to disk after stopping.
+
+        Parameters are saved as: run_prefix_parameters
+        Final array is saved as: run_prefix_array
         """
         try:
             if self._final_array.any():
-                print('Run already stopped.')
+                print('Run is already stopped.')
         except AttributeError:
             self._total_time = time.time() - self._time_start
             self._final_array = self.get_array()
-            # self._total_time = time.time() - self._time_start
+            self.
 
-            keys = [self.name + a for a in self.attrs]
-            for k, a in zip(keys, self.attrs):
-                cache_put(self.__dict__[a], key = k)
+            if self.saveonstop:
+                self.save()
 
-            self.replace_workers(dummy_worker)
+            self.stopevent.set()
+
+            replace_workers(dummy_worker)
+
+    def save_parameters(self):
+        """Utility function that saves parameters of the run to disk.
+        This function is called after self.stop().
+        """
+        savedict={}
+        for k,v in self.__dict__.items():
+            if type(v) is not np.ndarray:
+                if type(v) is not Event:
+                    savedict[k]=v
+        with open(config.saveconfig['Directory']+self.name+'_parameters','w') as file:
+            json.dump(savedict, file)
+
+    def save(self):
+        """Saves the run parameters and array to disk.
+        """
+        np.save(config.saveconfig['Directory']+self.name+'_array',self.final_array)
+        self.save_parameters()
+
+    def load(self):
+        """Loads the run parameters and array from disk.
+        """
+        with open(config.saveconfig['Directory']+self.name+'_parameters','r') as file:
+            self.__dict__ = json.load(file)
+        self.final_array = np.load(config.saveconfig['Directory']+self.name+'_array.npy')
+
 
     def acquisition_time(self):
+        """Returns the length of time run has exposed for.
+        """
         elapsed = time.time() - self._time_start 
-        #if elapsed > self._total_time:
         try:
             return self._total_time
         except AttributeError:
@@ -182,18 +231,4 @@ class ZRun:
             except AttributeError:
                 return result
 
-    def get_histograms(self):
-        raise NotImplementedError()
-
-# initial worker
-loc = locals()
 dummy_worker = make_worker_function(0, decluster = False)
-workers = [launch_process(dummy_worker) for n in range(NCORES)]
-
-time.sleep(0.2)
-launch_process(sink_process)
-
-# Launch OAcapture
-# TODO: This process shouldn't persist when the parent dies.
-# set daemon attribute to True so that child processes die with the parent
-#os.system('oacapture &> /dev/null &')
