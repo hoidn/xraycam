@@ -140,6 +140,7 @@ class ZRun:
                 replace_workers(worker_function)
 
                 self.initial_array = self.get_array()
+                self.initialcamstatus = cameracontrol.check_status()
 
 
             if duration is not None:
@@ -153,7 +154,7 @@ class ZRun:
                 t_thread = Thread(target = timeit, args = (self.stopevent,))
                 t_thread.start()
             else:
-                print("Loadonly set true, but file not found in save directory.")
+                raise FileNotFoundError('Loadonly set true, but file not found.')
 
     def stop(self):
         """Stop the acquisition.
@@ -170,7 +171,7 @@ class ZRun:
         except AttributeError:
             self._total_time = time.time() - self._time_start
             self._final_array = self.get_array()
-            self.
+            self.finalcamstatus = cameracontrol.check_status()
 
             if self.saveonstop:
                 self.save()

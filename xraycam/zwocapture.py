@@ -95,7 +95,7 @@ def check_status():
     try:
         status = {
         'Gain':camstatus.value['Gain'],
-        'Fps':1/camstatus.value['Exposure']*1000000,
+        'Exposure':camstatus.value['Exposure'],
         'HighSpeedMode':camstatus.value['HighSpeedMode'],
         'Temperature':camstatus.value['Temperature']/10
         }
