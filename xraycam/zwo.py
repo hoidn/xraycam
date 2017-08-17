@@ -3,14 +3,16 @@ import time
 import dill
 import humanfriendly
 import json
+import numpy as np
 
 from multiprocess import Process
-from threading import Thread
+from threading import Thread, Event
 import os
 
 from . import zmq_comm
 from . import declustering
 from . import config
+from . import zwocapture
 
 NCORES = 1
 CAPTURE = 'zwopython'
@@ -85,7 +87,7 @@ def shutdown_workers():
         w.terminate()
     sink.terminate()
 
-def replace_workers(self, worker_function):
+def replace_workers(worker_function):
     """
     Replace all current workers by processes running worker_function.
     """
@@ -111,7 +113,7 @@ class ZRun:
     TODO.
     """
     def __init__(self, run_prefix = '', window_min = 0, window_max = 255, 
-        threshold = 0, decluster = True, htime = None, loadonly = False, 
+        threshold = 0, decluster = True, duration = None, loadonly = False, 
         saveonstop = True, photon_value = 1):
 
         _validate_savedir()
@@ -121,7 +123,7 @@ class ZRun:
         self.window_max = window_max
         self.threshold  = threshold
         self.decluster = decluster
-        self.htime = htime
+        self.duration = duration
         self.loadonly = loadonly
         self.saveonstop = saveonstop
 
@@ -133,26 +135,27 @@ class ZRun:
             if not loadonly:
                 self._time_start = time.time()
 
-                worker_function = make_worker_function(threshold, window_min = window_min,
-                    window_max = window_max, decluster = decluster)
+                worker_function = make_worker_function(threshold, 
+                    window_min = window_min, window_max = window_max, 
+                    decluster = decluster)
 
                 # Kill the old workers and launch new ones
                 replace_workers(worker_function)
 
                 self.initial_array = self.get_array()
-                self.initialcamstatus = cameracontrol.check_status()
+                self.initialcamstatus = zwocapture.check_status()
 
 
-            if duration is not None:
-                def timeit(e):
-                    print("starting acquisition")
-                    e.wait(duration)
-                    if not e.is_set():
-                        self.stop()
-                        print("stopped acquisition")
-                self.stopevent = Event()                      
-                t_thread = Thread(target = timeit, args = (self.stopevent,))
-                t_thread.start()
+                if duration is not None:
+                    def timeit(e):
+                        print("starting acquisition")
+                        e.wait(duration)
+                        if not e.is_set():
+                            self.stop()
+                            print("stopped acquisition")
+                    self.stopevent = Event()                      
+                    t_thread = Thread(target = timeit, args = (self.stopevent,))
+                    t_thread.start()
             else:
                 raise FileNotFoundError('Loadonly set true, but file not found.')
 
@@ -166,17 +169,18 @@ class ZRun:
         Final array is saved as: run_prefix_array
         """
         try:
-            if self._final_array.any():
+            if self.final_array.any():
                 print('Run is already stopped.')
         except AttributeError:
             self._total_time = time.time() - self._time_start
-            self._final_array = self.get_array()
-            self.finalcamstatus = cameracontrol.check_status()
+            self.final_array = self.get_array()
+            self.finalcamstatus = zwocapture.check_status()
 
             if self.saveonstop:
                 self.save()
 
-            self.stopevent.set()
+            if self.duration is not None:
+                self.stopevent.set()
 
             replace_workers(dummy_worker)
 
@@ -187,7 +191,7 @@ class ZRun:
         savedict={}
         for k,v in self.__dict__.items():
             if type(v) is not np.ndarray:
-                if type(v) is not Event:
+                if type(v) is not eventtype:
                     savedict[k]=v
         with open(config.saveconfig['Directory']+self.name+'_parameters','w') as file:
             json.dump(savedict, file)
@@ -220,7 +224,7 @@ class ZRun:
         Get the sum of exposures in this data run.
         """
         try:
-            return self._final_array
+            return self.final_array
         except AttributeError:
             socket = context.socket(zmq.SUB)
             socket.connect(zmq_comm.client_addr)

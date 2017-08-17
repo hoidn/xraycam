@@ -1,9 +1,7 @@
 import numpy as np
 from ctypes import c_int
 import numpy.ctypeslib as npct
-from . import utils
-
-PKG_NAME = __name__.split('.')[0]
+import os
 
 def do_decluster(arr2d, threshold, dtype = np.uint8):
     # TODO: does ascontiguousarray slow things down if arr2d is already
@@ -13,7 +11,7 @@ def do_decluster(arr2d, threshold, dtype = np.uint8):
     declustered = np.zeros_like(arr1d)
     arr_uint = npct.ndpointer(dtype = np.uint8, ndim = 1, flags = 'C_CONTIGUOUS')
     # load the c extension
-    libcd = npct.load_library("libclusters", utils.resource_path("../lib/",  PKG_NAME))
+    libcd = npct.load_library("libclusters", os.path.dirname(__file__)+'/../lib/')
 
     libcd.searchFrame_array_8.restype = None
     libcd.searchFrame_array_8.argtypes = [arr_uint, arr_uint, c_int, c_int, c_int]

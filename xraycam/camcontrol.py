@@ -84,13 +84,12 @@ def _get_poisson_uncertainties(intensities):
     return np.sqrt(np.array(intensities))
 
 def _plot_lineout(pixeli, intensity, show = False, label = '', error_bars = False, normalize=False):
-    try:
-        if normalize=='peak':
-            norm = np.max(intensity)
-        elif normalize == 'integral':
-            norm = np.sum(intensity)
-        else:
-            norm = 1.
+    if normalize=='peak':
+        norm = np.max(intensity)
+    elif normalize == 'integral':
+        norm = np.sum(intensity)
+    else:
+        norm = 1.
     if error_bars:
         bars = _get_poisson_uncertainties(intensity) / norm
         error_y = dict(
@@ -130,7 +129,7 @@ def _load_detector_settings(d):
 class DataRun:
     def __init__(self, run_prefix = '', rotate = False, photon_value = 1, 
         window_min = 0, window_max = 255, threshold = 0, decluster = True, 
-        htime = None, loadonly = False, saveonstop = True):
+        duration = None, loadonly = False, saveonstop = True):
 
         self.rotate = rotate
         _load_detector_settings(self.__dict__)
@@ -142,9 +141,9 @@ class DataRun:
             self.photon_value = photon_value
 
         self.zrun = zwo.ZRun(run_prefix = run_prefix, window_min = window_min, 
-            window_max = 255, threshold = threshold, decluster = decluster, 
-            htime = htime, loadonly = loadonly, saveonstop = saveonstop,
-            photon_value = self.photon_value)
+            window_max = window_max, threshold = threshold, decluster = decluster, 
+            duration = duration, loadonly = loadonly, saveonstop = saveonstop,
+            photon_value = self.photon_value)# Need to changes these to self. so that load_detector works
         self.name = run_prefix
 
     def acquisition_time(self):
@@ -202,7 +201,7 @@ class RunSet:
         """
         TODO docstring
         """
-        self.dataruns = None
+        self.dataruns = []
 
     def __iter__(self):
         return self.dataruns.__iter__()

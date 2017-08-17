@@ -41,8 +41,7 @@ class ScanAndAction:
         self.actionlist = []
         for move in self.movelist:
             datarunfuncs = lambda m = move: camcontrol.DataRun(
-                run_prefix=self.make_prefix(m), htime=self.duration,
-                runparam={self.movetype:m},**self.kwargs)
+                run_prefix=self.make_prefix(m), duration=self.duration,**self.kwargs)
             movefuncs = lambda m = move: self.movefunc(m)
             self.actionlist.append([movefuncs,datarunfuncs])    
 
@@ -74,11 +73,11 @@ class ScanAndAction:
                     action, datarun = a
                     self.runset.insert(datarun())
             else:
-                print('All files already loaded. Run load_scan with doreload=True to reload files.')
+                print('All files already loaded. Run load_scan with doreloafd=True to reload files.')
 
     def insert_scan(self,movevalue):
         self.movefunc(movevalue)
-        self.runset.insert(camcontrol.DataRun(run_prefix=self.make_prefix(movevalue),htime=self.duration,
+        self.runset.insert(camcontrol.DataRun(run_prefix=self.make_prefix(movevalue),duration=self.duration,
             runparam={self.movetype:movevalue},**self.kwargs))
 
 class AngleScan:
@@ -253,7 +252,7 @@ class ScanThread(threading.Thread):
                 dr = datarun()
                 print('scan started')
                 self.current = dr
-                self.runset.insert(dr)
+                self.runset.dataruns.append(dr)#quick fix 8.16.17
                 self._wait_current_complete()
             else:
                 self.current.stop()
@@ -282,21 +281,21 @@ class RunSequence:
     finish before beginning the next.
     """
     def __init__(self, runset, prefix = None, number_runs = 0,
-            htime = None, dashinfilename=True, **kwargs):
+            duration = None, dashinfilename=True, **kwargs):
         """
         prefix : str
             Datarun prefix prefix.
         number_runs : int
-        htime : str
+        duration : str
         """
         self.runset = runset
-        if htime is None:
-            raise ValueError("kwarg htime MUST be provided to instantiate RunSequence.")
+        if duration is None:
+            raise ValueError("kwarg duration MUST be provided to instantiate RunSequence.")
         if prefix is None:
             raise ValueError("RunSequence must have a prefix to save files.")
         else:
             prefixes = [prefix + '_%d' % i for i in range(number_runs)]
-        self.datarunfuncs = [lambda run_prefix=prefix: camcontrol.DataRun(run_prefix = run_prefix, htime = htime, **kwargs)
+        self.datarunfuncs = [lambda run_prefix=prefix: camcontrol.DataRun(run_prefix = run_prefix, duration = duration, **kwargs)
             for prefix in prefixes]
         self.actionlist = [[_do_nothing,dr] for dr in self.datarunfuncs]
 
@@ -326,7 +325,7 @@ class ActionQueue(threading.Thread):
                 actiondict = self.queue[self.currentindex]
                 if actiondict['action'] == 'capture':
                     self.datarun_action(runset=actiondict['runset'],
-                        run_prefix=actiondict['run_prefix'],htime=actiondict['htime'],
+                        run_prefix=actiondict['run_prefix'],duration=actiondict['duration'],
                         **actiondict['kwargs'])
                 elif actiondict['action'] == 'move_sample':
                     self.move_sample_action(actiondict['degree'])
@@ -335,12 +334,12 @@ class ActionQueue(threading.Thread):
                 self.currentindex+=1
 
 
-    def datarun_action(self,runset,run_prefix,htime,**kwargs):
+    def datarun_action(self,runset,run_prefix,duration,**kwargs):
         if runset is None:
             runset = camcontrol.RunSet()
             self.runsetlist.insert(runset)
         print("Starting datarun: "+run_prefix)
-        dr = camcontrol.DataRun(run_prefix = run_prefix, htime = htime, **kwargs)
+        dr = camcontrol.DataRun(run_prefix = run_prefix, duration = duration, **kwargs)
         self.current = dr
         runset.insert(dr)
         self._wait_current_complete()
