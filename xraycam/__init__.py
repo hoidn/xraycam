@@ -2,6 +2,7 @@ import time
 from . import zwocapture
 from . import config
 from . import zwo
+from .zwocapture import check_status
 
 def start():
 	"""Initiates back-end processes, and begins continuously pulling

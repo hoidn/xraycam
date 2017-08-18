@@ -131,7 +131,16 @@ class DataRun:
         window_min = 0, window_max = 255, threshold = 0, decluster = True, 
         duration = None, loadonly = False, saveonstop = True):
 
+        self.name = run_prefix
         self.rotate = rotate
+        self.window_min = window_min
+        self.window_max = window_max
+        self.threshold  = threshold
+        self.decluster = decluster
+        self.duration = duration
+        self.loadonly = loadonly
+        self.saveonstop = saveonstop
+
         _load_detector_settings(self.__dict__)
 
         try:
@@ -140,11 +149,11 @@ class DataRun:
         except KeyError:
             self.photon_value = photon_value
 
-        self.zrun = zwo.ZRun(run_prefix = run_prefix, window_min = window_min, 
-            window_max = window_max, threshold = threshold, decluster = decluster, 
-            duration = duration, loadonly = loadonly, saveonstop = saveonstop,
+        self.zrun = zwo.ZRun(run_prefix = self.name, window_min = self.window_min, 
+            window_max = self.window_max, threshold = self.threshold, decluster = self.decluster, 
+            duration = self.duration, loadonly = self.loadonly, saveonstop = self.saveonstop,
             photon_value = self.photon_value)# Need to changes these to self. so that load_detector works
-        self.name = run_prefix
+        
 
     def acquisition_time(self):
         return self.zrun.acquisition_time()

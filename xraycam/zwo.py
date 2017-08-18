@@ -191,7 +191,7 @@ class ZRun:
         savedict={}
         for k,v in self.__dict__.items():
             if type(v) is not np.ndarray:
-                if type(v) is not eventtype:
+                if type(v) is not Event:
                     savedict[k]=v
         with open(config.saveconfig['Directory']+self.name+'_parameters','w') as file:
             json.dump(savedict, file)
