@@ -2,7 +2,7 @@ import threading, time
 import numpy as np
 from . import camcontrol
 from arduinostepper import arduinostepper as ardstep
-from .config import saveconfig
+from . import config
 import os
 
 def _check_for_data_files(prefixlist):
@@ -98,21 +98,15 @@ class AngleScan:
         prefix (str): prefix of dataruns saved by the runset
     """
 
-    def __init__(self, duration, anglerange, stepsize, prefix, **kwargs):
+    def __init__(self, prefix, duration, anglerange, stepsize, **kwargs):
         self.duration = duration
         self.anglerange = anglerange
         self.stepsize = stepsize
         self.prefix = prefix
         self.runset = camcontrol.RunSet()
         self.kwargs = kwargs
-        self.anglelist = []
-        # self.prefixes = []
-        for angle in np.arange(self.anglerange[0],self.anglerange[1]+self.stepsize,self.stepsize):
-            self.anglelist.append(angle)
-            # self.prefixes.append(self.prefix+'_%d'+ % angle)
-        self.continuescan = False
-        self.scanandaction = ScanAndAction(self.runset,self.prefix,'angle',self.anglelist,
-            ardstep.go_to_degree,self.continuescan,self.duration,**kwargs)
+        self.anglelist = np.arange(self.anglerange[0],self.anglerange[1]+self.stepsize,self.stepsize)
+        self.prefixlist = ['self.prefix' + '_{:2f}deg'.format(a) for a in self.anglelist]
 
 
     def angle_plot(self,start=0,end=-1,show=True,**kwargs):
@@ -127,14 +121,43 @@ class AngleScan:
             if show:
                 camcontrol.plt.show()
 
-    def load_scan(self,doreload = False):
-        self.scanandaction.load_scan(doreload=doreload)
+    def load(self):
+        #TODO: make this load a common function for all multiple-run-type classes
+        def _exists(prefix):
+            return prefix+'_array.npy' in os.listdir(xraycam.config.saveconfig['Directory'])
+
+        if all([_exists(p) for p in self.prefixlist]):
+            print('Loading all scans.')
+            self.runset = camcontrol.RunSet()
+            for p in self.prefixlist:
+                self.runset.dataruns.append(camcontrol.DataRun(run_prefix = p))
+        if any([_exists(p) for p in self.prefixlist]):
+            print('Partially complete: {0} runs of {1} were found.'.format(
+                sum([_exists(p) for p in self.prefixlist]),self.number_runs))
+        else:
+            raise FileNotFoundError
 
     def run_scan(self):
-        self.scanandaction.run_scan()
+        try:
+            self.load()
+        except FileNotFoundError:
+            self.actionqueue = ActionQueue()
+            for a, p in zip(self.anglelist, self.prefixlist):
+                self.actionqueue.append({
+                    'action':'move_sample',
+                    'degree':a
+                    })
+                pkwargs = self.kwargs.copy()
+                pkwargs['run_prefix'] = p
+                pkwargs['duration'] = duration
+                self.actionqueue.append({
+                    'action':'datarun',
+                    'runkwargs':pkwargs
+                    })
+            self.actionqueue.start()
 
     def stop(self):
-        self.scanandaction.runthread.stopevent.set()
+        self.actionqueue.stop()
 
     def insert_scan(self,movevalue):
         self.anglelist.append(movevalue)
@@ -387,63 +410,87 @@ class ActionQueue(threading.Thread):
         self.stopevent = threading.Event()
         self.queue = []
         self.completed = []
-        self.currentdatarun = None
+        self.current = None
+        self._finished = False
 
     def run(self):
         while self.queue != []:
-            if not self.stopevent.is_set()
-            actionitem = self.queue.pop(0)
-            self.parse_action(actionitem)
-            self.completed.append(actionitem)
+            if not self.stopevent.is_set():
+                actionitem = self.queue.pop(0)
+                self.parse_action(actionitem)
+                self.completed.append(actionitem)
+            else:
+                print('Stop command received, stopping queue.')
+                self._finished = True
+                break
+        self._finished = True
+        print('ActionQueue completed.')
 
     def parse_action(self,actionitem):
         if actionitem['action'] == 'datarun':
-            self.currentdatarun = camcontrol.DataRun(**actionitem['runkwargs'])
+            self.current = camcontrol.DataRun(**actionitem['runkwargs'])
             rs = actionitem.get('runset',None)
             if rs is not None:
-                rs.dataruns.append(self.currentdatarun)
-            self.currentdatarun.zrun.block_until_complete()
-        if actionitem['action'] == 'move_sample':
+                rs.dataruns.append(self.current)
+            self.current.zrun.block_until_complete()
+
+        elif actionitem['action'] == 'move_sample':
             ardstep.go_to_degree(actionitem['degree'])
-        if actionitem['action'] == 'move_camera':
+
+        elif actionitem['action'] == 'move_camera':
             ardstep.go_to_mm(actionitem['position'])
+
+        elif actionitem['action'] == 'multiple_runs':
+            self.current = MultipleRuns(
+                prefix = actionitem['prefix'],
+                number_runs = actionitem['number_runs'],
+                duration = actionitem['duration'],
+                **actionitem['runkwargs']
+                )
+            assert not self.current._loaded, 'MultipleRuns scan prefixes already exist.'+\
+             ' Use a new prefix.'
+            self.current.start()
+            self.current.block_until_complete()
 
     def stop(self):
         self.stopevent.set()
-        if self.currentdatarun is not None:
-            self.currentdatarun.stop()
+        if self.current is not None:
+            self.current.stop()
 
 class MultipleRuns:
 
-    def __init__(self, runset = None, prefix = None, number_runs = 0, rotate = False, 
+    def __init__(self, prefix, number_runs, duration, runset = None, rotate = False, 
         photon_value = 1, window_min = 0, window_max = 255, threshold = 0, 
-        decluster = True, duration = None, loadonly = False):
+        decluster = True, loadonly = False):
 
-    try:
-        self.load()
-
-    except FileNotFoundError:
-        if runset is None:
-            self.runset = camcontrol.RunSet()
-        else:
-            self.runset = runset
         self.prefix = prefix
-        self.number_runs = number_runs
-        self.runkwargs = dict(rotate =rotate, photon_value = photon_value, 
-            window_min = window_min, window_max = window_max, threshold = threshold, 
-            decluster = decluster, duration = duration, loadonly = loadonly)
         self.prefixlist = [self.prefix + '_{:d}'.format(i) for i in range(number_runs)]
+        self.number_runs = number_runs
+        self._loaded = False
+
+        try:
+            self.load()
+            self._loaded = True
+
+        except FileNotFoundError:
+            if runset is None:
+                self.runset = camcontrol.RunSet()
+            else:
+                self.runset = runset
+            self.runkwargs = dict(rotate =rotate, photon_value = photon_value, 
+                window_min = window_min, window_max = window_max, threshold = threshold, 
+                decluster = decluster, duration = duration, loadonly = loadonly)
 
     def load(self):
         def _exists(prefix):
-            return prefix+'_array.npy' in os.listdir(xraycam.config.saveconfig['Directory'])
+            return prefix+'_array.npy' in os.listdir(config.saveconfig['Directory'])
 
         if all([_exists(p) for p in self.prefixlist]):
             print('Loading all scans.')
             self.runset = camcontrol.RunSet()
             for p in self.prefixlist:
-                self.runset.dataruns.append(camcontrol.DataRun(run_prefix = p))
-        if any([_exists(p) for p in self.prefixlist]):
+                self.runset.dataruns.append(camcontrol.DataRun(run_prefix = p, loadonly = True))
+        elif any([_exists(p) for p in self.prefixlist]):
             print('Partially complete: {0} runs of {1} were found.'.format(
                 sum([_exists(p) for p in self.prefixlist]),self.number_runs))
         else:
@@ -460,3 +507,10 @@ class MultipleRuns:
                 'runset':self.runset
                 })
         self.actionqueue.start()
+
+    def stop(self):
+        return self.actionqueue.stop()
+
+    def block_until_complete(self, waitperiod = 0.1):
+        while not self.actionqueue._finished:
+            time.sleep(waitperiod)
