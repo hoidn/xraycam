@@ -68,11 +68,11 @@ def add_energy_scale(lineout,known_energy,known_bin='peak',rebinparam=1,camerain
             indexfromcenter=-indexfromcenter # if camera gets flipped upside down, just reverse the indices
     return (energy_from_x_position(calc_bragg_angle(known_energy,braggorder),indexfromcenter,rebinparam,braggorder),lineout)
     
-def fwhm_2d(arr2d,fwhm_smooth=2):
+def fwhm_lineout(lineout,fwhm_smooth=2):
     """
-    Given a 2d-array of [x's,y's] calculate fwhm of peak in the lineout.
+    Given a lineout of [x's,y's] calculate fwhm of peak.
     """
-    x, y = arr2d
+    x, y = lineout
     y = gfilt(y,fwhm_smooth)
     spline = UnivariateSpline(x, y - np.max(y)/2, s = 0)
     r1, r2 = spline.roots()
@@ -263,4 +263,64 @@ def _linear_background_subtraction(lineout,excluderegions,show=False):
         plt.show()
     
     return np.array([lineoutx,lineouty])
+
+def explore_best_region(data,step=100,width=200, energy =(None,None), normalize = None):
+    
+    try:
+        frame = data.get_frame()
+    except AttributeError:
+        frame = data
+        assert type(frame) == camcontrol.Frame, "Input must be DataRun or Frame."
+    
+    #Plot for different ranges
+    fwhmlist = []
+    for r in [[i,i+width] for i in np.arange(0,frame.data.shape[0]-width,step)]:
+        try:
+            fwhm = fwhm_2d(frame.get_lineout(yrange = r, 
+                           normalize = normalize, energy = energy))
+            lab = str(r)+'-fwhm {:.3f}'.format(fwhm)
+        except (RuntimeError, ValueError):
+            fwhm = 'CalcErr'
+            lab = str(r)+'-fwhm '+fwhm
+        fwhmlist.append([r,fwhm])
+        frame.plot_lineout(yrange = r, label = lab, show = False, 
+                           normalize = normalize, energy = energy)
+    
+    #Cleanup and label plot
+    for tr in plt.figures[0].traces:
+        tr['visible'] = 'legendonly'
+    if energy == (None,None):
+        plt.xlabel('Bin (px)')
+    else:
+        plt.xlabel('Energy (eV)')
+    if normalize is None:
+        plt.ylabel('Counts')
+    else:
+        plt.ylabel('Normalized Counts')
+    plt.title('Subregion lineouts')    
+    plt.show()
+    
+    #Plot Fwhm vs row if fwhm calculated successfully
+    if 'CalcErr' not in [el[1] for el in fwhmlist]:
+        fwhmplotlist = np.array([[np.mean(el[0]),el[1]] for el in fwhmlist])
+        plt.plot(*np.transpose(fwhmplotlist), label = 'fwhm\'s')
+        plt.xlabel('Center of Subregion')
+        if energy == (None,None):
+            plt.ylabel('fwhm (px)')
+        else:
+            plt.ylabel('fwhm (eV)')
+        plt.title('Fwhm vs Subregion')
+        plt.show()
+        
+    #Plot Center of mass vs row of frame
+    cm = center_of_masses(frame.data)
+    plt.plot(np.arange(len(cm)),cm,label='center-of-masses')
+    plt.xlabel('Row of camera sensor')
+    plt.ylabel('Center of mass of signal')
+    plt.title('Center of mass vs. row of frame')
+    plt.show()
+    
+                        
+    
+
     

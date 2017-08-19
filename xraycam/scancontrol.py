@@ -2,6 +2,8 @@ import threading, time
 import numpy as np
 from . import camcontrol
 from arduinostepper import arduinostepper as ardstep
+from .config import saveconfig
+import os
 
 def _check_for_data_files(prefixlist):
     import os
@@ -306,6 +308,74 @@ class RunSequence:
     def stop(self):
         self.runthread.stopevent.set()
 
+# class ActionQueue(threading.Thread):
+#     """
+#     Class that takes in a list of dictionaries describing actions,
+#     and does them in order, waiting for the action to complete before
+#     moving on to the next action.
+#     """
+#     def __init__(self,name='actionqueuethread'):
+#         threading.Thread.__init__(self,name=name)
+#         self.stopevent = threading.Event()
+#         self.queue = []
+#         self.currentindex = 0
+#         self.runsetlist = []
+
+#     def run(self):
+#         while self.currentindex < len(self.queue):
+#             if not self.stopevent.is_set():
+#                 actiondict = self.queue[self.currentindex]
+#                 if actiondict['action'] == 'capture':
+#                     self.datarun_action(runset=actiondict['runset'],
+#                         run_prefix=actiondict['run_prefix'],duration=actiondict['duration'],
+#                         **actiondict['kwargs'])
+#                 elif actiondict['action'] == 'move_sample':
+#                     self.move_sample_action(actiondict['degree'])
+#                 elif actiondict['action'] == 'move_camera':
+#                     self.move_camera_action(actiondict['mm'])
+#                 self.currentindex+=1
+
+
+#     def datarun_action(self,runset,run_prefix,duration,**kwargs):
+#         if runset is None:
+#             runset = camcontrol.RunSet()
+#             self.runsetlist.insert(runset)
+#         print("Starting datarun: "+run_prefix)
+#         dr = camcontrol.DataRun(run_prefix = run_prefix, duration = duration, **kwargs)
+#         self.current = dr
+#         runset.insert(dr)
+#         self._wait_current_complete()
+
+#     def move_sample_action(self,degree):
+#         print("Moving sample to position: "+str(degree)+'deg')
+#         ardstep.go_to_degree(degree)
+
+#     def move_camera_action(self,mm):
+#         print("Moving camera to position: "+str(mm)+'mm')
+#         ardstep.go_to_mm(mm)
+
+#     def insert_action(self,actiondict,index=None):
+#         if index is None:
+#             self.queue.append(actiondict)
+#         else:
+#             self.queue.insert(index,actiondict)
+
+#     def _wait_current_complete(self):
+#         """
+#         Wait until the current run has completed.
+#         """
+#         import time
+#         # Wait until current run is complete
+#         if self.current is not None:
+#             prev_time = self.current.acquisition_time()
+#             while not self.stopevent.is_set():
+#                 cur_time = self.current.acquisition_time()
+#                 if cur_time != prev_time:
+#                     prev_time = cur_time
+#                     self.stopevent.wait(1)
+#                 else:
+#                     break 
+
 class ActionQueue(threading.Thread):
     """
     Class that takes in a list of dictionaries describing actions,
@@ -316,63 +386,77 @@ class ActionQueue(threading.Thread):
         threading.Thread.__init__(self,name=name)
         self.stopevent = threading.Event()
         self.queue = []
-        self.currentindex = 0
-        self.runsetlist = []
+        self.completed = []
+        self.currentdatarun = None
 
     def run(self):
-        while self.currentindex < len(self.queue):
-            if not self.stopevent.is_set():
-                actiondict = self.queue[self.currentindex]
-                if actiondict['action'] == 'capture':
-                    self.datarun_action(runset=actiondict['runset'],
-                        run_prefix=actiondict['run_prefix'],duration=actiondict['duration'],
-                        **actiondict['kwargs'])
-                elif actiondict['action'] == 'move_sample':
-                    self.move_sample_action(actiondict['degree'])
-                elif actiondict['action'] == 'move_camera':
-                    self.move_camera_action(actiondict['mm'])
-                self.currentindex+=1
+        while self.queue != []:
+            if not self.stopevent.is_set()
+            actionitem = self.queue.pop(0)
+            self.parse_action(actionitem)
+            self.completed.append(actionitem)
 
+    def parse_action(self,actionitem):
+        if actionitem['action'] == 'datarun':
+            self.currentdatarun = camcontrol.DataRun(**actionitem['runkwargs'])
+            rs = actionitem.get('runset',None)
+            if rs is not None:
+                rs.dataruns.append(self.currentdatarun)
+            self.currentdatarun.zrun.block_until_complete()
+        if actionitem['action'] == 'move_sample':
+            ardstep.go_to_degree(actionitem['degree'])
+        if actionitem['action'] == 'move_camera':
+            ardstep.go_to_mm(actionitem['position'])
 
-    def datarun_action(self,runset,run_prefix,duration,**kwargs):
+    def stop(self):
+        self.stopevent.set()
+        if self.currentdatarun is not None:
+            self.currentdatarun.stop()
+
+class MultipleRuns:
+
+    def __init__(self, runset = None, prefix = None, number_runs = 0, rotate = False, 
+        photon_value = 1, window_min = 0, window_max = 255, threshold = 0, 
+        decluster = True, duration = None, loadonly = False):
+
+    try:
+        self.load()
+
+    except FileNotFoundError:
         if runset is None:
-            runset = camcontrol.RunSet()
-            self.runsetlist.insert(runset)
-        print("Starting datarun: "+run_prefix)
-        dr = camcontrol.DataRun(run_prefix = run_prefix, duration = duration, **kwargs)
-        self.current = dr
-        runset.insert(dr)
-        self._wait_current_complete()
-
-    def move_sample_action(self,degree):
-        print("Moving sample to position: "+str(degree)+'deg')
-        ardstep.go_to_degree(degree)
-
-    def move_camera_action(self,mm):
-        print("Moving camera to position: "+str(mm)+'mm')
-        ardstep.go_to_mm(mm)
-
-    def insert_action(self,actiondict,index=None):
-        if index is None:
-            self.queue.append(actiondict)
+            self.runset = camcontrol.RunSet()
         else:
-            self.queue.insert(index,actiondict)
+            self.runset = runset
+        self.prefix = prefix
+        self.number_runs = number_runs
+        self.runkwargs = dict(rotate =rotate, photon_value = photon_value, 
+            window_min = window_min, window_max = window_max, threshold = threshold, 
+            decluster = decluster, duration = duration, loadonly = loadonly)
+        self.prefixlist = [self.prefix + '_{:d}'.format(i) for i in range(number_runs)]
 
-    def _wait_current_complete(self):
-        """
-        Wait until the current run has completed.
-        """
-        import time
-        # Wait until current run is complete
-        if self.current is not None:
-            prev_time = self.current.acquisition_time()
-            while not self.stopevent.is_set():
-                cur_time = self.current.acquisition_time()
-                if cur_time != prev_time:
-                    prev_time = cur_time
-                    self.stopevent.wait(1)
-                else:
-                    break 
+    def load(self):
+        def _exists(prefix):
+            return prefix+'_array.npy' in os.listdir(xraycam.config.saveconfig['Directory'])
 
+        if all([_exists(p) for p in self.prefixlist]):
+            print('Loading all scans.')
+            self.runset = camcontrol.RunSet()
+            for p in self.prefixlist:
+                self.runset.dataruns.append(camcontrol.DataRun(run_prefix = p))
+        if any([_exists(p) for p in self.prefixlist]):
+            print('Partially complete: {0} runs of {1} were found.'.format(
+                sum([_exists(p) for p in self.prefixlist]),self.number_runs))
+        else:
+            raise FileNotFoundError
 
-
+    def start(self):
+        self.actionqueue = ActionQueue()
+        for p in self.prefixlist:
+            pkwargs = self.runkwargs.copy()
+            pkwargs['run_prefix'] = p
+            self.actionqueue.queue.append(
+                {'action':'datarun',
+                'runkwargs':pkwargs,
+                'runset':self.runset
+                })
+        self.actionqueue.start()

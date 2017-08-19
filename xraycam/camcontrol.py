@@ -120,10 +120,12 @@ def _plot_histogram(values,xmin=1,xmax=255,show=True,binsize=1.000001,calib=[Non
         plt.show()
 
 def _load_detector_settings(d):
-    if config.sensorsettings is not {}:
-        print('Loading sensor settings: ',config.sensorsettings)
-        for k,v in config.sensorsettings.items():
-            d[k] = v
+    defaults = dict(window_min = 0, window_max = 255, threshold = 0)
+    if all([d[k]==defaults[k] for k in defaults.keys()]):
+        if config.sensorsettings is not {}:
+            print('Loading sensor settings: ',config.sensorsettings)
+            for k,v in config.sensorsettings.items():
+                d[k] = v
 
 
 class DataRun:
@@ -171,7 +173,9 @@ class DataRun:
         self.zrun.stop()
 
     def get_frame(self):
-        # TODO: do we need this attribute?
+        """
+        Get the frame object with the current data of the DataRun.  Stores in temporary _frame variable.
+        """
         time = self.acquisition_time()
         self._frame = Frame(array = self.get_array(), name = self.name,
             photon_value = self.photon_value, time = time, rotate= self.rotate)
@@ -316,7 +320,7 @@ class Frame:
         return np.array(lineout)
 
     def plot_lineout(self, smooth = 0, error_bars = False, rebin = 1, label = '',
-            show = True, peaknormalize = False, normalize=False, **kwargs):
+            show = True, normalize=False, **kwargs):
         if not label:
             label = self.name
         return _plot_lineout(*self.get_lineout(rebin = rebin, smooth = smooth,**kwargs),
@@ -330,13 +334,13 @@ class Frame:
         """
         _plot_histogram(self.data.flatten(),xmin=xmin,xmax=xmax,binsize=binsize,calib=calibrate,show=show,**kwargs)
 
-    def counts_per_second(self, elapsed = None, start = None, end = None):
+    def counts_per_second(self, elapsed = None, start = None, end = None, yrange = (None,None)):
         """
         Return average counts per second the exposures that constitute this Frame.
         """
         if elapsed is None:
             elapsed = self.time
-        return np.sum(self._raw_lineout()[start:end]) / self.time
+        return np.sum(self._raw_lineout(yrange = yrange)[start:end]) / self.time
 
 def save_lineout_csv(datarun,filename,tosharedfolder=False,**kwargs):
     try:

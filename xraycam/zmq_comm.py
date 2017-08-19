@@ -55,43 +55,8 @@ def launch_worker(f, flags = 0, copy = True, track = False):
             arr_in = recv_array(receiver,copy = copy, track = track)
             arr_out = f(arr_in)
             send_array(sender, arr_out, flags = flags, copy = copy, track = track)
-    except KeyboardInterrupt:
-        print("Worker received interrupt, stopping.")
-    finally:
-        sender.close()
-        receiver.close()
-        context.term()
-
-def launch_worker_oa(f, flags = 0, copy = True, track = False):
-    """
-    Run a worker that evaluates the function f on numpy arrays parsed
-    from ventilator messages and sends the results, assumed to also be a
-    numpy array, to the sink.
-
-    Incoming message data must be in the following format: uint16
-    (height), uint16 (width), uint8 array[].
-    """
-    import struct
-    context = zmq.Context()
-
-    # Socket to receive messages on
-    receiver = context.socket(zmq.PULL)
-    receiver.connect(ventilator_addr)
-
-    # Socket to send messages to
-    sender = context.socket(zmq.PUSH)
-    sender.connect(sink_addr)
-    #print("Worker waiting for data...")
-    try:
-        while True:
-            message_in = receiver.recv(copy = copy, track = track)
-            height, width = struct.unpack('HH', message_in[:4])
-            arr_in = np.frombuffer(message_in[4:], dtype = 'uint8').reshape((height, width))
-
-            arr_out = f(arr_in)
-            send_array(sender, arr_out, flags = flags, copy = copy, track = track)
-    except KeyboardInterrupt:
-        print("Worker received interrupt, stopping.")
+    # except KeyboardInterrupt:
+    #     print("Worker received interrupt, stopping.")
     finally:
         sender.close()
         receiver.close()
@@ -123,8 +88,8 @@ def start_sink_routine(f, flags = 0, copy = True, track = False):
             arr_in = recv_array(receiver, flags = flags, copy = copy, track = track)
             output = f(output, arr_in)
             send_array(publisher, output, flags = flags, copy = copy, track = track)
-    except KeyboardInterrupt:
-        print("Sink received interrupt, stopping.")
+    # except KeyboardInterrupt:
+    #     print("Sink received interrupt, stopping.")
     finally:
         publisher.close()
         receiver.close()

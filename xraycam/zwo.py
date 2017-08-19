@@ -236,4 +236,15 @@ class ZRun:
             except AttributeError:
                 return result
 
+    def block_until_complete(self, waitperiod = 0.1):
+        prev_time = self.acquisition_time()
+        time.sleep(waitperiod)
+        while True:
+            cur_time = self.acquisition_time()
+            if cur_time != prev_time:
+                prev_time = cur_time
+                time.sleep(waitperiod)
+            else:
+                break
+
 dummy_worker = make_worker_function(0, decluster = False)
