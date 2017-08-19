@@ -106,7 +106,7 @@ class AngleScan:
         self.runset = camcontrol.RunSet()
         self.kwargs = kwargs
         self.anglelist = np.arange(self.anglerange[0],self.anglerange[1]+self.stepsize,self.stepsize)
-        self.prefixlist = ['self.prefix' + '_{:2f}deg'.format(a) for a in self.anglelist]
+        self.prefixlist = [self.prefix + '_{:.2f}deg'.format(a) for a in self.anglelist]
 
 
     def angle_plot(self,start=0,end=-1,show=True,**kwargs):
@@ -124,7 +124,7 @@ class AngleScan:
     def load(self):
         #TODO: make this load a common function for all multiple-run-type classes
         def _exists(prefix):
-            return prefix+'_array.npy' in os.listdir(xraycam.config.saveconfig['Directory'])
+            return prefix+'_array.npy' in os.listdir(config.saveconfig['Directory'])
 
         if all([_exists(p) for p in self.prefixlist]):
             print('Loading all scans.')
@@ -143,17 +143,18 @@ class AngleScan:
         except FileNotFoundError:
             self.actionqueue = ActionQueue()
             for a, p in zip(self.anglelist, self.prefixlist):
-                self.actionqueue.append({
+                self.actionqueue.queue.append({
                     'action':'move_sample',
                     'degree':a
                     })
                 pkwargs = self.kwargs.copy()
                 pkwargs['run_prefix'] = p
-                pkwargs['duration'] = duration
-                self.actionqueue.append({
+                pkwargs['duration'] = self.duration
+                self.actionqueue.queue.append({
                     'action':'datarun',
                     'runkwargs':pkwargs
                     })
+            print(self.actionqueue.queue)
             self.actionqueue.start()
 
     def stop(self):
