@@ -139,7 +139,7 @@ class CalibPeakDrift:
     def make_peakdrift_list(self,plot=False,show=False):
         peakdriftlist = []
         for dr in self.dataruns:
-            peakdriftlist.append([dr.base._time_start,get_peaks(dr.get_lineout(**self.kwargs))[0,0]])
+            peakdriftlist.append([dr.zrun._time_start,get_peaks(dr.get_lineout(**self.kwargs))[0,0]])
         peakdriftlist = np.transpose(peakdriftlist)
         times, peaks = peakdriftlist
         times = (times-times[0])/60
@@ -172,11 +172,11 @@ class CalibPeakDrift:
 def exponential_func(t,tau,A,offset):
         return A*(1-np.exp(-t/tau))+offset
 
-def find_files(prefixguess,directory='cache'):
+def find_files(prefixguess,directory='cache',postfix = '_array.npy'):
     import re, os
     import pandas as pd
     
-    reg = re.compile(r'(.*'+prefixguess+r'.*)_final_array')
+    reg = re.compile(r'(.*'+prefixguess+r'.*)'+postfix)
     matches=[]
     for file in os.listdir(directory):
         m = reg.match(file)
@@ -276,7 +276,7 @@ def explore_best_region(data,step=100,width=200, energy =(None,None), normalize 
     fwhmlist = []
     for r in [[i,i+width] for i in np.arange(0,frame.data.shape[0]-width,step)]:
         try:
-            fwhm = fwhm_2d(frame.get_lineout(yrange = r, 
+            fwhm = fwhm_lineout(frame.get_lineout(yrange = r, 
                            normalize = normalize, energy = energy))
             lab = str(r)+'-fwhm {:.3f}'.format(fwhm)
         except (RuntimeError, ValueError):

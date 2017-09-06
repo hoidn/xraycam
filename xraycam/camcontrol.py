@@ -230,7 +230,7 @@ class RunSet:
     def get_total_frame(self, runindices = ...):
         import operator
         from functools import reduce
-        return reduce(operator.add,[x.get_frame() for x in self.dataruns[crop[0]:crop[1]]])
+        return reduce(operator.add,[x.get_frame() for x in np.array(self.dataruns)[runindices]])
 
 
 class Frame:
