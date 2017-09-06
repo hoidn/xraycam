@@ -131,7 +131,9 @@ def _load_detector_settings(d):
 class DataRun:
     def __init__(self, run_prefix = '', rotate = False, photon_value = 1, 
         window_min = 0, window_max = 255, threshold = 0, decluster = True, 
-        duration = None, loadonly = False, saveonstop = True):
+        duration = None, loadonly = False, saveonstop = True, **kwargs):
+
+        paramsavefromkwargs = ('angle','mm_camera')
 
         self.name = run_prefix
         self.rotate = rotate
@@ -142,6 +144,10 @@ class DataRun:
         self.duration = duration
         self.loadonly = loadonly
         self.saveonstop = saveonstop
+        
+        for k in paramsavefromkwargs:
+            if k in kwargs:
+                self.__dict__[k] = kwargs[k]
 
         _load_detector_settings(self.__dict__)
 
