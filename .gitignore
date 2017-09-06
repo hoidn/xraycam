@@ -14,3 +14,9 @@ logging/.ipynb_checkpoints
 *bak
 *swp
 *o
+build
+dist
+examples/*
+log.txt
+zwo-logging.log
+oaCapture*
