@@ -45,7 +45,7 @@ def energy_from_x_position(bragg,xpx,rebinparam=1,braggorder=1):
      of the central energy, in pixels 'xpx',
     and returns the energy of the x-ray which will be refocused to that position in the Rowland geometry.
     
-    It is specific to Rowland diameter = 10cm, pixel size = 5.2 microns, and camera tangent to the circle.
+    It is specific to Rowland diameter = 10cm, pixel size = 2.9 microns, and camera tangent to the circle.
     """
     pizel_size=2.9e-3 # NOTE: changed for new camera
     xpos=xpx*pizel_size*rebinparam
@@ -83,14 +83,17 @@ def center_of_masses(arr2d):
         return np.dot(arr1d, np.arange(len(arr1d)))/np.sum(arr1d)
     return np.array(list(map(_cm, arr2d)))
 
-def cmplot(datarun, smooth=0,show=True):
-    arr2d = np.rot90(datarun.get_array()) # trying rot90 instead of transpose
+def cmplot(data, smooth=0,show=True):
+    try:
+        arr2d = np.rot90(data.get_array()) # trying rot90 instead of transpose
+    except AttributeError:
+        arr2d = data.data # trying rot90 instead of transpose
 
     y = center_of_masses(arr2d)
     x = np.arange(len(y))
     if smooth != 0:
         y = gfilt(y,smooth)
-    camcontrol.plt.plot(x, y, label = 'CM lineout')
+    camcontrol.plt.plot(x, y, label = data.name)
     if show == True:
         camcontrol.plt.show()
 
@@ -233,7 +236,7 @@ def _take_lineout_erange(lineout,erange):
     indices = (energies > erange[0]) & (energies < erange[1])
     return np.array([energies[indices],intensities[indices]])
 
-def _linear_background_subtraction(lineout,excluderegions,show=False):
+def _linear_background_subtraction(lineout, excluderegions, show = False, calcsnr = False):
     #remove exlusion regions
     bglineoutx,bglineouty = np.copy(lineout)
     for exclude in excluderegions:
@@ -261,6 +264,17 @@ def _linear_background_subtraction(lineout,excluderegions,show=False):
         plt.plot(lineoutx,lineouty,label='bg-sub')
         plt.figures[0].traces[-1]['visible']='legendonly'
         plt.show()
+
+    if calcsnr:
+        maxindex = np.argmax(lineout[1])
+        signalmax = lineout[1][maxindex]
+        bg = out.eval(x=lineout[0][maxindex])
+        peaksnr = signalmax/bg
+        print('Signal-to-noise report:')
+        print('  At peak ({:.2f}):'.format(lineoutx[maxindex]))
+        print('    {:>14} {:.0f}'.format('Peak signal:',signalmax))
+        print('    {:>14} {:.0f}'.format('Bg signal:',bg))
+        print('    {:>14} {:.2f}'.format('Ratio:',peaksnr))
     
     return np.array([lineoutx,lineouty])
 
@@ -320,7 +334,77 @@ def explore_best_region(data,step=100,width=200, energy =(None,None), normalize 
     plt.title('Center of mass vs. row of frame')
     plt.show()
     
-                        
+def row_outliers_quick(row, width = 10, thresh = 8, padding = 20):
+    indices = []
+    for i in np.arange(width+padding,len(row)-width-padding,2*width):
+        if any(is_outlier(row[i-width:i+width],thresh)):
+            outliers = np.where(is_outlier(row[i-width:i+width],thresh))[0]
+            for o in outliers:
+                indices.append(i-width+o)
+    return np.array(indices)
     
+def is_2d_outlier(array,centerindex,size=5,thresh=5):
+    cx, cy = centerindex
+    subarr = array[cx-size:cx+size+1,cy-size:cy+size+1]
+    pos = int((len(subarr.flatten())-1)/2)
+    return is_outlier(subarr.flatten(),thresh)[pos]
+    
+def get_frame_outliers(frame, padding = 20):
+    ts = time.time()
+    
+    data = frame.data.copy()
+    #first pass with quick row checking
+    potentialoutliers = []
+    print('checking rows')
+    for i, row in enumerate(data[padding:-padding]):
+        rowoutliers = [[i+padding,x] for x in row_outliers_quick(row)]
+        for ro in rowoutliers:
+            potentialoutliers.append(ro)
+    print('took:','{:.2f}'.format(time.time()-ts),'sec')
+    ts = time.time()
+#     print(potentialoutliers)
+    
+    #now final pass with 2d outlier check
+    print('final pass')
+    outliers=[]
+    for po in potentialoutliers:
+#         print(data[po[0]-5:po[0]+5+1,po[1]-5:po[1]+5+1])
+        if is_2d_outlier(data,po):
+            outliers.append(po)
+    print('took:','{:.2f}'.format(time.time()-ts),'sec')
+            
+    return np.array(outliers)
+    
+    
+def is_outlier(points, thresh=3.5):
+    """
+    Returns a boolean array with True if points are outliers and False 
+    otherwise.
 
-    
+    Parameters:
+    -----------
+        points : An numobservations by numdimensions array of observations
+        thresh : The modified z-score to use as a threshold. Observations with
+            a modified z-score (based on the median absolute deviation) greater
+            than this value will be classified as outliers.
+
+    Returns:
+    --------
+        mask : A numobservations-length boolean array.
+
+    References:
+    ----------
+        Boris Iglewicz and David Hoaglin (1993), "Volume 16: How to Detect and
+        Handle Outliers", The ASQC Basic References in Quality Control:
+        Statistical Techniques, Edward F. Mykytka, Ph.D., Editor. 
+    """
+    if len(points.shape) == 1:
+        points = points[:,None]
+    median = np.median(points, axis=0)
+    diff = np.sum((points - median)**2, axis=-1)
+    diff = np.sqrt(diff)
+    med_abs_deviation = np.median(diff)
+
+    modified_z_score = 0.6745 * diff / med_abs_deviation
+
+    return modified_z_score > thresh

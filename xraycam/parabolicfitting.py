@@ -1,10 +1,22 @@
 import numpy as np
-from xraycam.camalysis import *
 from . import camcontrol
+from .camalysis import get_peaks
 
 def integral_normalize(lineout):
     lineoutx, lineouty = lineout
     return np.array([lineoutx,lineouty/np.sum(lineouty)])
+
+def quadfit(arr2d, smooth = 5):
+    """
+    Return the second- and first-order coefficients for a parabolic
+    fit to array of center of mass values of the rows of arr2d.
+    """
+    y = gfilt(center_of_masses(arr2d), smooth)# - np.percentile(filtered, 1)) *Note: changed gfilt to act on y instead of on 2d array.  Seems to produce better parabolas.
+    x = np.arange(len(y))
+    good = np.where(np.isfinite(y))[0] #note to self: is there assumption here that cutting out non-finite elements won't appreciably change the curvature?
+    a, b, c, = np.polyfit(x[good], y[good], 2)
+    # For some reason a factor of -1 is needed
+    return a, b, c
 
 class ParabolicFit:
     

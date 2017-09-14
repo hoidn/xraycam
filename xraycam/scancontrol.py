@@ -76,6 +76,41 @@ class ActionQueue(threading.Thread):
         if self.current is not None:
             self.current.stop()
 
+    def add_sample_scan(self, sample, samplemap, totalcounts = None, index = None):
+        import datetime
+        
+        #configure run_prefix
+        prefix = '{0}.{1}runset{2}_{3}'.format(
+            datetime.date.today().strftime('%m.%d.%y'),
+            sample,
+            samplemap[sample]['runsetindex'],
+            samplemap[sample]['numruns']
+        )
+        samplemap[sample]['numruns'] += 1
+        
+        #configure duration based on count rate
+        if totalcounts is not None:
+            dur = int(totalcounts / samplemap[sample]['countspersec'])
+        else:
+            dur = samplemap[sample]['duration']
+        
+        #initialize runset if necessary
+        if samplemap[sample]['runset'] is None:
+            samplemap[sample]['runset'] = camcontrol.RunSet()
+
+
+        #insert into proper position
+        if index is None:
+            index = len(self.queue)
+        self.queue.insert(index,{'action':'move_sample','degree':samplemap[sample]['angle']})
+        self.queue.insert(index + 1,{
+                'action':'datarun',
+                'runkwargs':{
+                    'run_prefix':prefix,
+                    'duration':dur},
+                'runset':samplemap[sample]['runset']
+            })
+
 class MultipleRuns:
     """Class that takes multiple DataRuns with the same run parameters. Useful
     when taking long exposures to monitor for possible changes in signal, or to
@@ -174,10 +209,11 @@ class AngleScan:
         pkwargs = self.kwargs.copy()
         pkwargs['run_prefix'] = prefix
         pkwargs['duration'] = self.duration
-        pkwargs['angle'] = angle
+        pkwargs['angle'] = angle.item()#.item is to convert numpy float to float for JSON serializability
         self.actionqueue.queue.append({
             'action':'datarun',
-            'runkwargs':pkwargs
+            'runkwargs':pkwargs,
+            'runset':self.runset
             })
 
     def load(self):
@@ -190,9 +226,9 @@ class AngleScan:
             self.runset = camcontrol.RunSet()
             for p in self.prefixlist:
                 self.runset.dataruns.append(camcontrol.DataRun(run_prefix = p))
-        if any([_exists(p) for p in self.prefixlist]):
+        elif any([_exists(p) for p in self.prefixlist]):
             print('Partially complete: {0} runs of {1} were found.'.format(
-                sum([_exists(p) for p in self.prefixlist]),self.number_runs))
+                sum([_exists(p) for p in self.prefixlist]),len(self.anglelist)))
         else:
             raise FileNotFoundError
 
@@ -203,7 +239,6 @@ class AngleScan:
             self.actionqueue = ActionQueue()
             for a, p in zip(self.anglelist, self.prefixlist):
                 self.make_queue_entry(a,p)
-            print(self.actionqueue.queue)
             self.actionqueue.start()
 
     def stop(self):
@@ -216,9 +251,9 @@ class AngleScan:
         assert self.actionqueue is None or self.actionqueue._finished == True, \
         'Error, self.actionqueue is not empty or finished. Must not be in the\
          middle of a scan to insert another value.'
-            self.actionqueue = ActionQueue()
-            self.make_queue_entry(movevalue,p)
-            self.actionqueue.start()
+        self.actionqueue = ActionQueue()
+        self.make_queue_entry(movevalue,p)
+        self.actionqueue.start()
 
     def plot_scans(self, **kwargs):
         [x.plot_lineout(show=False,**kwargs) for x in self.runset]
@@ -228,11 +263,11 @@ class AngleScan:
         if self.runset.dataruns is None:
             print('Error: datafiles not loaded.')
         else:#TODO: sort plot based on angles, in case run gets iserted with angle out of order
-            angles = [x.runparam['angle'] for x in self.runset.dataruns]
+            angles = [x.zrun.angle for x in self.runset.dataruns]
             counts = [x.counts_per_second(start=start,end=end) for x in self.runset.dataruns]
             sortindices = np.argsort(angles)
-            angles = angles[sortindices]
-            counts = counts[sortindices]
+            angles = np.array(angles)[sortindices]
+            counts = np.array(counts)[sortindices]
             camcontrol.plt.plot(angles,counts,label='angle_scan',**kwargs)
             camcontrol.plt.xlabel('Angle (deg)')
             camcontrol.plt.ylabel('Counts/sec in region '+str(start)+':'+str(end))
@@ -240,10 +275,10 @@ class AngleScan:
                 camcontrol.plt.show()
 
     def check_scan_status(self):
-        import humanfriendly
+        # import humanfriendly
         currentscans = len(self.runset.dataruns)
         numscans = len(self.anglelist)
-        timeleft = humanfriendly.parse_timespan(self.duration) - self.runset.dataruns[-1].acquisition_time()
+        timeleft = self.duration - self.runset.dataruns[-1].acquisition_time()
         if currentscans < numscans:
             print("On scan ",str(currentscans)," of ",str(numscans),'.')
             print("{:.0f}".format(timeleft)," seconds left in current scan.")
@@ -288,10 +323,11 @@ class CameraScan:
         pkwargs = self.kwargs.copy()
         pkwargs['run_prefix'] = prefix
         pkwargs['duration'] = self.duration
-        pkwargs['mm_camera'] = dist
+        pkwargs['mm_camera'] = dist.item() #.item is to convert numpy float to float for JSON serializability
         self.actionqueue.queue.append({
             'action':'datarun',
-            'runkwargs':pkwargs
+            'runkwargs':pkwargs,
+            'runset':self.runset
             })
 
     def load(self):
@@ -304,9 +340,9 @@ class CameraScan:
             self.runset = camcontrol.RunSet()
             for p in self.prefixlist:
                 self.runset.dataruns.append(camcontrol.DataRun(run_prefix = p))
-        if any([_exists(p) for p in self.prefixlist]):
+        elif any([_exists(p) for p in self.prefixlist]):
             print('Partially complete: {0} runs of {1} were found.'.format(
-                sum([_exists(p) for p in self.prefixlist]),self.number_runs))
+                sum([_exists(p) for p in self.prefixlist]),len(self.distlist)))
         else:
             raise FileNotFoundError
 
@@ -317,7 +353,6 @@ class CameraScan:
             self.actionqueue = ActionQueue()
             for d, p in zip(self.distlist, self.prefixlist):
                 self.make_queue_entry(d,p)
-            print(self.actionqueue.queue)
             self.actionqueue.start()
 
     def stop(self):
@@ -330,19 +365,19 @@ class CameraScan:
         assert self.actionqueue is None or self.actionqueue._finished == True, \
         'Error, self.actionqueue is not empty or finished. Must not be in the\
          middle of a scan to insert another value.'
-            self.actionqueue = ActionQueue()
-            self.make_queue_entry(movevalue,p)
-            self.actionqueue.start()
+        self.actionqueue = ActionQueue()
+        self.make_queue_entry(movevalue,p)
+        self.actionqueue.start()
 
     def plot_scans(self, **kwargs):
         [x.plot_lineout(show=False,**kwargs) for x in self.runset]
         camcontrol.plt.show()
 
     def check_scan_status(self):
-        import humanfriendly
+        # import humanfriendly
         currentscans = len(self.runset.dataruns)
         numscans = len(self.distlist)
-        timeleft = humanfriendly.parse_timespan(self.duration) - self.runset.dataruns[-1].acquisition_time()
+        timeleft = self.duration - self.runset.dataruns[-1].acquisition_time()
         if currentscans < numscans:
             print("On scan ",str(currentscans)," of ",str(numscans),'.')
             print("{:.0f}".format(timeleft)," seconds left in current scan.")
@@ -355,7 +390,7 @@ class CameraScan:
 
     def plot_fwhm_vs_pos(self,**kwargs):
         from xraycam.camalysis import fwhm_lineout
-        fwhmpos = np.array([[x.runparam['mm_camera'],fwhm_lineout(x.get_lineout(**kwargs))] for x in self.runset])
+        fwhmpos = np.array([[x.zrun.mm_camera,fwhm_lineout(x.get_lineout(**kwargs))] for x in self.runset])
         camcontrol.plt.plot(*fwhmpos.transpose(),label='FWHM vs Pos')
         camcontrol.plt.xlabel('mm_camera')
         camcontrol.plt.ylabel('FWHM (eV or bins)')

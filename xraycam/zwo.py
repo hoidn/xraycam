@@ -114,7 +114,7 @@ class ZRun:
     """
     def __init__(self, run_prefix = '', window_min = 0, window_max = 255, 
         threshold = 0, decluster = True, duration = None, loadonly = False, 
-        saveonstop = True, photon_value = 1):
+        saveonstop = True, photon_value = 1, **kwargs):
 
         _validate_savedir()
         
@@ -126,6 +126,9 @@ class ZRun:
         self.duration = duration
         self.loadonly = loadonly
         self.saveonstop = saveonstop
+
+        for k in kwargs:
+            self.__dict__[k] = kwargs[k]
 
         try:
             self.load()

@@ -145,9 +145,10 @@ class DataRun:
         self.loadonly = loadonly
         self.saveonstop = saveonstop
         
+        paramsave = {}
         for k in paramsavefromkwargs:
             if k in kwargs:
-                self.__dict__[k] = kwargs[k]
+                paramsave[k] = kwargs[k]
 
         _load_detector_settings(self.__dict__)
 
@@ -160,7 +161,7 @@ class DataRun:
         self.zrun = zwo.ZRun(run_prefix = self.name, window_min = self.window_min, 
             window_max = self.window_max, threshold = self.threshold, decluster = self.decluster, 
             duration = self.duration, loadonly = self.loadonly, saveonstop = self.saveonstop,
-            photon_value = self.photon_value)# Need to changes these to self. so that load_detector works
+            photon_value = self.photon_value,**paramsave)# Need to changes these to self. so that load_detector works
         
 
     def acquisition_time(self):
@@ -237,6 +238,25 @@ class RunSet:
         import operator
         from functools import reduce
         return reduce(operator.add,[x.get_frame() for x in np.array(self.dataruns)[runindices]])
+
+    def load_runs(self, prefix, specify = None):
+        if type(specify) != np.ndarray:
+            if specify == None:
+                istart = 0
+            elif type(specify) == int:
+                istart = specify
+            i = istart
+            while True:
+                try:
+                    self.dataruns.append(DataRun(run_prefix='{}_{}'.format(prefix,i),loadonly=True))
+                    i += 1
+                except FileNotFoundError:
+                    break
+                    
+            print('Runs {0} through {1} were loaded.'.format(istart,i-1))
+        else:
+            for i in specify:
+                    self.dataruns.append(DataRun(run_prefix='{}_{}'.format(prefix,i),loadonly=True))    
 
 
 class Frame:
