@@ -133,6 +133,8 @@ class DataRun:
         window_min = 0, window_max = 255, threshold = 0, decluster = True, 
         duration = None, loadonly = False, saveonstop = True, **kwargs):
 
+        #which parameters to search for in kwargs that will get saved in
+        #the 'datarun_parameters' file.
         paramsavefromkwargs = ('angle','mm_camera')
 
         self.name = run_prefix
@@ -157,11 +159,15 @@ class DataRun:
             print('Using photon_value from config: ',self.photon_value)
         except KeyError:
             self.photon_value = photon_value
+            print('Using photon_value from function call: ',self.photon_value)
 
         self.zrun = zwo.ZRun(run_prefix = self.name, window_min = self.window_min, 
             window_max = self.window_max, threshold = self.threshold, decluster = self.decluster, 
             duration = self.duration, loadonly = self.loadonly, saveonstop = self.saveonstop,
             photon_value = self.photon_value,**paramsave)# Need to changes these to self. so that load_detector works
+        if self.zrun._finished:
+            for k, v in self.zrun.__dict__.items():
+                self.__dict__[k] = v
         
 
     def acquisition_time(self):
@@ -367,6 +373,15 @@ class Frame:
         if elapsed is None:
             elapsed = self.time
         return np.sum(self._raw_lineout(yrange = yrange)[start:end]) / self.time
+
+    def save_to_disk(self, filename, directory = 'cache'):
+        with open(directory + '/' + filename + '.frame', 'wb') as f:
+            dill.dump(self,f)
+
+def load_Frame(filename, directory = 'cache'):
+    with open(directory + '/' + filename + '.frame', 'rb') as f:
+        frame = dill.load(f)
+    return frame
 
 def save_lineout_csv(datarun,filename,tosharedfolder=False,**kwargs):
     try:

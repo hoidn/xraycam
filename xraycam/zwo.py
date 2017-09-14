@@ -126,6 +126,7 @@ class ZRun:
         self.duration = duration
         self.loadonly = loadonly
         self.saveonstop = saveonstop
+        self._finished = False
 
         for k in kwargs:
             self.__dict__[k] = kwargs[k]
@@ -133,6 +134,7 @@ class ZRun:
         try:
             self.load()
             print ("Run loaded from disk.")
+            self._finished = True
 
         except FileNotFoundError:
             if not loadonly:
@@ -178,6 +180,7 @@ class ZRun:
             self._total_time = time.time() - self._time_start
             self.final_array = self.get_array()
             self.finalcamstatus = zwocapture.check_status()
+            self._finished = True
 
             if self.saveonstop:
                 self.save()
@@ -240,14 +243,16 @@ class ZRun:
                 return result
 
     def block_until_complete(self, waitperiod = 0.1):
-        prev_time = self.acquisition_time()
-        time.sleep(waitperiod)
-        while True:
-            cur_time = self.acquisition_time()
-            if cur_time != prev_time:
-                prev_time = cur_time
-                time.sleep(waitperiod)
-            else:
-                break
+        while not self._finished:
+            time.sleep(waitperiod)
+        # prev_time = self.acquisition_time()
+        # time.sleep(waitperiod)
+        # while True:
+        #     cur_time = self.acquisition_time()
+        #     if cur_time != prev_time:
+        #         prev_time = cur_time
+        #         time.sleep(waitperiod)
+        #     else:
+        #         break
 
 dummy_worker = make_worker_function(0, decluster = False)
