@@ -6,6 +6,7 @@ import operator
 import logging
 import os
 import time
+import dill
 
 from functools import reduce
 

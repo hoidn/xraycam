@@ -83,11 +83,14 @@ def center_of_masses(arr2d):
         return np.dot(arr1d, np.arange(len(arr1d)))/np.sum(arr1d)
     return np.array(list(map(_cm, arr2d)))
 
-def cmplot(data, smooth=0,show=True):
+def cmplot(data, smooth = 0, crop = None, show = True):
     try:
         arr2d = np.rot90(data.get_array()) # trying rot90 instead of transpose
     except AttributeError:
         arr2d = data.data # trying rot90 instead of transpose
+
+    if crop is not None:
+        arr2d = arr2d[:,crop[0]:crop[1]]
 
     y = center_of_masses(arr2d)
     x = np.arange(len(y))
@@ -269,12 +272,12 @@ def _linear_background_subtraction(lineout, excluderegions, show = False, calcsn
         maxindex = np.argmax(lineout[1])
         signalmax = lineout[1][maxindex]
         bg = out.eval(x=lineout[0][maxindex])
-        peaksnr = signalmax/bg
-        print('Signal-to-noise report:')
+        ratio = signalmax/bg
+        print('Signal report:')
         print('  At peak ({:.2f}):'.format(lineoutx[maxindex]))
         print('    {:>14} {:.0f}'.format('Peak signal:',signalmax))
         print('    {:>14} {:.0f}'.format('Bg signal:',bg))
-        print('    {:>14} {:.2f}'.format('Ratio:',peaksnr))
+        print('    {:>14} {:.2f}'.format('Ratio:',ratio))
     
     return np.array([lineoutx,lineouty])
 

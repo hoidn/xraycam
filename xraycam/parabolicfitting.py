@@ -1,6 +1,8 @@
 import numpy as np
 from . import camcontrol
-from .camalysis import get_peaks
+from .camalysis import get_peaks, center_of_masses
+from scipy.ndimage.filters import gaussian_filter as gfilt
+
 
 def integral_normalize(lineout):
     lineoutx, lineouty = lineout
