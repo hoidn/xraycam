@@ -1,9 +1,10 @@
 import threading, time
 import numpy as np
 from . import camcontrol
-from arduinostepper import arduinostepper as ardstep
 from . import config
 import os
+from arduinostepper import arduinostepper as ardstep
+from SpellmanUSB.SpellmanUSB import spellman
 
 def _check_for_data_files(prefixlist):
     import os
@@ -70,6 +71,10 @@ class ActionQueue(threading.Thread):
 
             self.current.start()
             self.current.block_until_complete()
+        elif actionitem['action'] == 'disengage_high_voltage':
+            spellman.disengage_high_voltage()
+        elif actionitem['action'] == 'engage_high_voltage':
+            spellman.engage_high_voltage()
 
     def stop(self):
         self.stopevent.set()
