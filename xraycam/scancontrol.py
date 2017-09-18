@@ -75,6 +75,8 @@ class ActionQueue(threading.Thread):
             spellman.disengage_high_voltage()
         elif actionitem['action'] == 'engage_high_voltage':
             spellman.engage_high_voltage()
+        elif actionitem['action'] == 'spellman_clear_setpoints':
+            spellman.clear_setpoints()
 
     def stop(self):
         self.stopevent.set()
