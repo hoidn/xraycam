@@ -148,61 +148,72 @@ def splitting(lmfitout,v1str,v2str):
     v2center = lmfitout.best_values[v2str+'_center']
     return v2center-v1center
 
-pkalpha2peakfitprofile = dict(v1_gamma=0.3,v1_center=2012.7,
+pkalpha2peakfitprofile = dict(v1_gamma=0.3,v1_sigma=0.2,v1_center=2012.7,
     v2_center=2013.5,bg_intercept=-2013)
 
 skalpha2peakfitprofile = dict(v1_gamma=0.3,v1_center=2306.9,
     v2_center=2307.7,bg_intercept=-2307)
 
-class do_peak_fit:
+class two_voigt_fit:
     
-    def __init__(self,lineout, numpeaks=2,sample='sample',initialprofile=pkalpha2peakfitprofile,runoninit=True):
-        self.sample=sample
-        self.lineoutx=lineout[0]
-        self.lineouty=lineout[1]
+    def __init__(self, lineout, sample = 'sample', 
+        linearbg = True, initialprofile = pkalpha2peakfitprofile, 
+        runoninit = True, weighted = True, fitrange = None):
+
+        self.sample = sample
+        self.lineoutx = lineout[0]
+        self.lineouty = lineout[1]
+        self.linearbg = linearbg
+        self.weighted = weighted
+        self.fitrange = fitrange
+
         self.voigt1 = models.VoigtModel(prefix='v1_')
         self.voigt2 = models.VoigtModel(prefix='v2_')
-        #if numpeaks == 4:
-        #    self.voigt3 = models.VoigtModel(prefix='v3_')
-        #    self.voigt4 = models.VoigtModel(prefix='v4_')
-        self.linbg = models.LinearModel(prefix='bg_')
-        #if numpeaks == 2:
-        self.model = self.voigt1+self.voigt2+self.linbg
-        #elif numpeaks == 4:
-        #    self.model = self.voigt1+self.voigt2+self.voigt3+self.voigt4+self.linbg
+        if linearbg:
+            self.linbg = models.LinearModel(prefix='bg_')
+            self.model = self.voigt1 + self.voigt2 + self.linbg
+        else:
+            self.model = self.voigt1 + self.voigt2
+
         self.pars=self.voigt1.make_params()
         self.pars.update(self.voigt2.make_params())
-        self.pars.update(self.linbg.make_params())
-        self.initialprofile=initialprofile
+        if linearbg:
+            self.pars.update(self.linbg.make_params())
+
+        self.initialprofile = initialprofile
         self.initialize_pars()
-        self.complist=[]
+
+        self.complist = []
         if runoninit:
-            self.run_fit()
-            self.print_summary()
+            self.do_fit()
     
     def reset_pars(self):
         self.pars=self.voigt1.make_params()
         self.pars.update(self.voigt2.make_params())
-        self.pars.update(self.linbg.make_params())
+        if self.linearbg:
+            self.pars.update(self.linbg.make_params())
     
     def initialize_pars(self):
-        [self.pars[x].set(value=0.22) for x in [('v%d_sigma')%i for i in (1,2)]]
-        #self.pars['v1_amplitude'].set(expr='v2_amplitude*0.5')
+        self.pars['v1_sigma'].set(vary=True)
         self.pars['v2_sigma'].set(expr='v1_sigma')
         self.pars['v1_gamma'].set(vary=True)
         self.pars['v2_gamma'].set(expr='v1_gamma')
-        #self.pars['v1_gamma'].set(value=0.3)
-        #self.pars['v1_center'].set(value=2013)
-        #self.pars['v2_center'].set(value=2013.8)
         self.pars['v1_amplitude'].set(value=max(self.lineouty)/2)
         self.pars['v2_amplitude'].set(value=max(self.lineouty))
-        #self.pars['bg_intercept'].set(value=-2014)
         for k,v in self.initialprofile.items():
             self.pars[k].set(value=v)
         
-    def run_fit(self):
-        self.out = self.model.fit(self.lineouty,self.pars,x=self.lineoutx)
-        self.complist = np.array([[self.lineoutx,self.out.eval_components()[i]] for i in ('v1_','v2_','bg_')])
+    def do_fit(self):
+        if self.fitrange is None:
+            self.out = self.model.fit(self.lineouty,self.pars,x=self.lineoutx)
+        else:
+            x, y = _take_lineout_erange(self.lineout,[self.fitrange[0],self.fitrange[1]])
+            self.out = self.model.fit(x, self.pars, y)
+        if self.linearbg:
+            compprefixes = ('v1_', 'v2_', 'bg_')
+        else:
+            compprefixes = ('v1_', 'v2_')
+        self.complist = np.array([[self.lineoutx,self.out.eval_components()[i]] for i in compprefixes])
     
     def plot_summary(self):
         plt.plot(self.lineoutx,self.lineouty,label='data')
@@ -231,7 +242,7 @@ class do_peak_fit:
             # fitlabel = self.sample+' fit' // this line and line above commented out on 3.9, delete later if unneeded
 
         try:
-            bestfit = self.out.best_fit
+            bestfit = self.out.eval(self.lineoutx)
             if normalize=='integral':
                 bestfit = bestfit/np.sum(self.lineouty)
             elif normalize=='peak':
