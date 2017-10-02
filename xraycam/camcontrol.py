@@ -165,7 +165,7 @@ class DataRun:
         self.zrun = zwo.ZRun(run_prefix = self.name, window_min = self.window_min, 
             window_max = self.window_max, threshold = self.threshold, decluster = self.decluster, 
             duration = self.duration, loadonly = self.loadonly, saveonstop = self.saveonstop,
-            photon_value = self.photon_value,**paramsave)# Need to changes these to self. so that load_detector works
+            photon_value = self.photon_value,**paramsave)
         if self.zrun._finished:
             for k, v in self.zrun.__dict__.items():
                 self.__dict__[k] = v

@@ -1,10 +1,14 @@
-import threading, time
+import threading
+import time
+import datetime
+import re
 import numpy as np
 from . import camcontrol
 from . import config
 import os
 from arduinostepper import arduinostepper as ardstep
 from SpellmanUSB.SpellmanUSB import spellman
+import xraycam
 
 def _check_for_data_files(prefixlist):
     import os
@@ -17,6 +21,44 @@ def _check_for_data_files(prefixlist):
             exists.append(False)
     return exists
 
+samplemap = {
+    'example':{
+        'angle':132,
+        'runset':None,
+        'runsetindex':0,
+        'duration':180
+        }
+}
+
+def check_samplemap_status():
+    done = []
+    for sample in samplemap:
+        try:
+            done.append(samplemap[sample]['runset'].dataruns[-1].zrun._finished)
+        except (IndexError, AttributeError) as e:
+            pass
+                     
+    if all(done):
+        print('Stalled or Finished')
+    
+    for sample in samplemap:
+        try:
+            dr = samplemap[sample]['runset'].dataruns[-1]
+            print(dr.acquisition_time(),'/',dr.duration,', ',dr.name)
+        except (IndexError, AttributeError) as e:
+            pass
+
+def _get_next_index(rootprefix):
+    matches=[]
+    rootre = re.compile(rootprefix+r'(\d*)_array')
+    for f in os.listdir(config.saveconfig['Directory']):
+        m = rootre.search(f)
+        if m:
+            matches.append(m.group(1))
+    if matches == []:
+        return 0
+    else:
+        return  max([int(s) for s in matches]) + 1
 
 class ActionQueue(threading.Thread):
     """
@@ -24,29 +66,39 @@ class ActionQueue(threading.Thread):
     and does them in order, waiting for the action to complete before
     moving on to the next action.
     """
-    def __init__(self,name='actionqueuethread'):
+    def __init__(self,name='actionqueuethread',continuous = False):
         threading.Thread.__init__(self,name=name)
         self.stopevent = threading.Event()
         self.queue = []
         self.completed = []
         self.current = None
         self._finished = False
+        self.continuous = continuous
+
 
     def run(self):
-        while self.queue != []:
-            if not self.stopevent.is_set():
-                actionitem = self.queue.pop(0)
-                self.parse_action(actionitem)
-                self.completed.append(actionitem)
-            else:
-                print('Stop command received, stopping queue.')
-                self._finished = True
+        while True:
+            while self.queue != []:
+                if not self.stopevent.is_set():
+                    actionitem = self.queue.pop(0)
+                    self.parse_action(actionitem)
+                    self.completed.append(actionitem)
+                else:
+                    print('Stop command received, stopping queue.')
+                    self._finished = True
+                    break
+            if not self.continuous or self.stopevent.is_set():
                 break
+            else:
+                time.sleep(1)
         self._finished = True
         print('ActionQueue completed.')
 
     def parse_action(self,actionitem):
         if actionitem['action'] == 'datarun':
+            if actionitem['runkwargs']['run_prefix'] == 'next':
+                root = actionitem['rootprefix']
+                actionitem['runkwargs']['run_prefix'] = root + str(_get_next_index(root))
             self.current = camcontrol.DataRun(**actionitem['runkwargs'])
             rs = actionitem.get('runset',None)
             if rs is not None:
@@ -71,29 +123,32 @@ class ActionQueue(threading.Thread):
 
             self.current.start()
             self.current.block_until_complete()
+
         elif actionitem['action'] == 'disengage_high_voltage':
             spellman.disengage_high_voltage()
+
         elif actionitem['action'] == 'engage_high_voltage':
             spellman.engage_high_voltage()
+
         elif actionitem['action'] == 'spellman_clear_setpoints':
             spellman.clear_setpoints()
+
+        elif actionitem['action'] == 'xraycam_shutdown':
+            xraycam.shutdown()
 
     def stop(self):
         self.stopevent.set()
         if self.current is not None:
             self.current.stop()
 
-    def add_sample_scan(self, sample, samplemap, totalcounts = None, index = None):
-        import datetime
+    def add_sample_scan(self, sample, totalcounts = None, index = None):
         
         #configure run_prefix
-        prefix = '{0}.{1}runset{2}_{3}'.format(
+        rootprefix = '{0}.{1}runset{2}_'.format(
             datetime.date.today().strftime('%m.%d.%y'),
             sample,
-            samplemap[sample]['runsetindex'],
-            samplemap[sample]['numruns']
+            samplemap[sample]['runsetindex']
         )
-        samplemap[sample]['numruns'] += 1
         
         #configure duration based on count rate
         if totalcounts is not None:
@@ -103,7 +158,9 @@ class ActionQueue(threading.Thread):
         
         #initialize runset if necessary
         if samplemap[sample]['runset'] is None:
-            samplemap[sample]['runset'] = camcontrol.RunSet()
+            rs = camcontrol.RunSet()
+            samplemap[sample]['runset'] = rs
+            rs.load_runs(rootprefix[:-1])
 
 
         #insert into proper position
@@ -113,9 +170,10 @@ class ActionQueue(threading.Thread):
         self.queue.insert(index + 1,{
                 'action':'datarun',
                 'runkwargs':{
-                    'run_prefix':prefix,
+                    'run_prefix':'next',
                     'duration':dur},
-                'runset':samplemap[sample]['runset']
+                'runset':samplemap[sample]['runset'],
+                'rootprefix':rootprefix
             })
 
 class MultipleRuns:

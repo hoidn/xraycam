@@ -22,7 +22,7 @@ def fit_resid_plotly(lmfitoutput,xvalues,xrange=None,poisson=False,comptraces=[]
                                 color='rgba(31,120,180,.5)'),fillcolor='rgba(31,120,180,0.25)')
         poissontrace2=go.Scatter(x=xvalues,y=-np.sqrt(lmfitoutput.data),xaxis='x',yaxis='y',
                                  name='poisson-',mode='lines',fill='tozeroy',line=dict(
-                                color='rgba(31,120,180,.5)'),fillcolor='rgba(31,120,180,s0.25)')
+                                color='rgba(31,120,180,.5)'),fillcolor='rgba(31,120,180,0.25)')
         data.append(poissontrace2)
         data.append(poissontrace1)
 
@@ -79,7 +79,7 @@ def fit_resid_plotly(lmfitoutput,xvalues,xrange=None,poisson=False,comptraces=[]
 
 
 #Ugh copy/pasting, but need to maintain backwards compatibility...
-def _residuals_plot(lmfitoutput,rawdata,xvalues,fxvalues,xrange=None,poisson=False,comptraces=[],complabels=[],save=False,joined=False):
+def _residuals_plot(lmfitoutput,rawdata,xvalues,fxvalues,xrange=None,poisson=False,plotcomponents = 'frommodel', complabels = None,save=False,joined=False):
     data=[]
 
     if poisson:
@@ -102,7 +102,12 @@ def _residuals_plot(lmfitoutput,rawdata,xvalues,fxvalues,xrange=None,poisson=Fal
         data.insert(1,poissontrace4)
         data.append(poissontrace3)
     
-    residtrace = go.Scatter(x=fxvalues,y=lmfitoutput.residual,xaxis='x',yaxis='y',mode='lines+markers',name='residuals',
+
+    if lmfitoutput.weights is not None:
+        resids = lmfitoutput.residual/lmfitoutput.weights
+    else:
+        resids = lmfitoutput.residual
+    residtrace = go.Scatter(x=fxvalues,y=resids,xaxis='x',yaxis='y',mode='lines+markers',name='residuals',
                            marker=dict(size=5),line=dict(width=1,
                                 color='rgb(49,54,149)'))
     fittrace = go.Scatter(x=xvalues,y=lmfitoutput.eval(x=xvalues),xaxis='x',yaxis='y2',name='fit',
@@ -118,14 +123,18 @@ def _residuals_plot(lmfitoutput,rawdata,xvalues,fxvalues,xrange=None,poisson=Fal
     for trace in[residtrace,datatrace,fittrace]:
         data.append(trace)
     
-    if comptraces is not []:
-        i=0
-        if not complabels:
-            complabels=['comp%d'% j for j in range(len(comptraces))]
-        #for tr in reversed(comptraces):
-        for tr in comptraces:
-            data.append(go.Scatter(x=tr[0],y=tr[1],xaxis='x',yaxis='y2',name=complabels[i]))#,visible='legendonly'))
-            i+=1
+    if plotcomponents == 'frommodel':
+        if complabels is None:
+            complabels = [c.prefix for c in lmfitoutput.components]
+        components = lmfitoutput.eval_components(x=xvalues)
+        for i, c in enumerate(components):
+            data.append(go.Scatter(x=xvalues,y=components[c],xaxis='x',yaxis='y2',name=complabels[i]))#,visible='legendonly'))
+    else:
+        if complabels is None:
+            complabels = plotcomponents.keys()
+        components = plotcomponents.values()
+        for i, c in enumerate(components):
+            data.append(go.Scatter(x=c[0],y=c[1],xaxis='x',yaxis='y2',name=complabels[i]))
     
     layout=go.Layout(
         xaxis=dict(domain=[0,1],anchor='y2',title='Energy(ev)',range=xrange),
@@ -591,3 +600,302 @@ class kalpha_linear_combination_fit:
             print('Oxidized Kalpha1: '+str(fitbestvalues['oxidized_1_center'])+' eV')
             print('Reduced Kalpha1: '+str(fitbestvalues['reduced_1_center'])+' eV')
 
+class TwoVoigtFit:
+    
+    def __init__(self, lineout, sample = 'sample', 
+        linearbg = True, initialprofile = pkalpha2peakfitprofile, 
+        runoninit = True, weighted = True, fitrange = None):
+
+        self.sample = sample
+        self.lineoutx = lineout[0]
+        self.lineouty = lineout[1]
+        self.linearbg = linearbg
+        self.weighted = weighted
+        self.fitrange = fitrange
+
+        self.voigt1 = models.VoigtModel(prefix='v1_')
+        self.voigt2 = models.VoigtModel(prefix='v2_')
+        if linearbg:
+            self.linbg = models.LinearModel(prefix='bg_')
+            self.model = self.voigt1 + self.voigt2 + self.linbg
+        else:
+            self.model = self.voigt1 + self.voigt2
+
+        self.pars=self.voigt1.make_params()
+        self.pars.update(self.voigt2.make_params())
+        if linearbg:
+            self.pars.update(self.linbg.make_params())
+
+        self.initialprofile = initialprofile
+        self.initialize_pars()
+
+        self.complist = []
+        if runoninit:
+            self.do_fit()
+    
+    def reset_pars(self):
+        self.pars=self.voigt1.make_params()
+        self.pars.update(self.voigt2.make_params())
+        if self.linearbg:
+            self.pars.update(self.linbg.make_params())
+    
+    def initialize_pars(self):
+        self.pars['v1_sigma'].set(vary=True)
+        self.pars['v2_sigma'].set(expr='v1_sigma')
+        self.pars['v1_gamma'].set(vary=True)
+        self.pars['v2_gamma'].set(expr='v1_gamma')
+        self.pars['v1_amplitude'].set(value=max(self.lineouty)/2)
+        self.pars['v2_amplitude'].set(value=max(self.lineouty))
+        for k,v in self.initialprofile.items():
+            self.pars[k].set(value=v)
+        
+    def do_fit(self):
+        if self.fitrange is None and not self.weighted:
+            self.out = self.model.fit(self.lineouty,self.pars,x=self.lineoutx)
+        elif self.fitrange is None and self.weighted:
+            self.out = self.model.fit(self.lineouty,self.pars,x=self.lineoutx,weights = 1/np.sqrt(self.lineouty))
+        elif self.fitrange is not None and not self.weighted:
+            x, y = _take_lineout_erange([self.lineoutx,self.lineouty],[self.fitrange[0],self.fitrange[1]])
+        elif self.fitrange is not None and self.weighted:
+            x, y = _take_lineout_erange([self.lineoutx,self.lineouty],[self.fitrange[0],self.fitrange[1]])
+            self.out = self.model.fit(y, self.pars, x = x, weights = 1/np.sqrt(y))
+        if self.linearbg:
+            compprefixes = ('v1_', 'v2_', 'bg_')
+        else:
+            compprefixes = ('v1_', 'v2_')
+        self.complist = np.array([[self.lineoutx,self.out.eval_components()[i]] for i in compprefixes])
+    
+    def plot_summary(self):
+        plt.plot(self.lineoutx,self.lineouty,label='data')
+        plt.plot(self.lineoutx,self.model.eval(self.pars,x=self.lineoutx),label='initial')
+        try:
+            plt.plot(self.lineoutx,self.out.eval(self.lineoutx),label='fit')
+        except:
+            plt.show()
+        else:
+            plt.show()
+
+    def plot_fit(self, mode=u'markers', show=True, normalize='integral', data=True):
+        lineouty=self.lineouty
+        if normalize=='integral':
+            lineouty=norm(lineouty,mode=normalize)
+        elif normalize == 'peak':
+            lineouty=norm(lineouty,mode=normalize)
+
+        fitlabel = self.sample+' fit'
+        if data:
+            plt.plot(self.lineoutx,lineouty,label=self.sample+' data',mode=mode)
+            fitcolor = 'rgba(0,0,0,0.7)'
+            # fitlabel = None
+        else:
+            fitcolor = None
+            # fitlabel = self.sample+' fit' // this line and line above commented out on 3.9, delete later if unneeded
+
+        try:
+            bestfit = self.out.eval(x = self.lineoutx)
+            if normalize=='integral':
+                bestfit = bestfit/np.sum(self.lineouty)
+            elif normalize=='peak':
+                bestfit = bestfit/np.max(self.lineouty)
+            plt.plot(self.lineoutx,bestfit,label=fitlabel,color=fitcolor)
+        except:
+            if show:
+                plt.show()
+        else:
+            if show:
+                plt.show()
+        
+    def residual_plot(self,save=False,xrange=None,poisson=1,joined=False,plotcomponents='frommodel',complabels=None,**kwargs):
+        if self.fitrange is None:
+            fxvalues = self.lineoutx
+        else:
+            fxvalues = _take_lineout_erange([self.lineoutx,self.lineouty],[self.fitrange[0],self.fitrange[1]])[0]
+        _residuals_plot(self.out,self.lineouty,self.lineoutx,fxvalues,
+            xrange=xrange,poisson=poisson,save=False,joined=False, plotcomponents = plotcomponents, **kwargs)
+        
+    def spin_splitting(self):
+        split = self.out.best_values['v2_center']-self.out.best_values['v1_center']
+        print('Ka1/Ka2 spin-split is : ',split)
+
+    def print_summary(self,verbose=False):
+        fitbestvalues = self.out.best_values
+        if verbose:
+            for p in ('v1_center','v2_center','v1_gamma','v2_gamma','v1_sigma','v2_sigma'):
+                print(p+':\t'+str(fitbestvalues[p]))
+        split = fitbestvalues['v2_center']-fitbestvalues['v1_center']
+        ratio = fitbestvalues['v2_amplitude']/fitbestvalues['v1_amplitude']
+        print('for sample: '+self.sample)
+        print('\tsplitting:\t'+'{: 10.3f}'.format(split))
+        print('\tratio:\t\t'+'{: 10.3f}'.format(ratio))
+        print('\tka1:\t\t'+'{: 10.3f}'.format(fitbestvalues['v2_center']))
+        print('\tgamma1:\t\t'+'{: 10.3f}'.format(fitbestvalues['v2_gamma']))
+        print('\tsigma1:\t\t'+'{: 10.3f}'.format(fitbestvalues['v2_sigma']))
+        print('\tredchi:\t\t'+'{: 10.3f}'.format(self.out.redchi))
+
+class KalphaLinearCombinationFit:
+
+    def __init__(self,lineout,sample='sample',refpeakshapes=None,linbg=True,runoninit=False, fitrange=None, weighted=True):
+        self.sample = sample
+        self.lineoutx = lineout[0]
+        self.lineouty = lineout[1]
+        self.fitrange = fitrange
+        self.weighted = weighted
+        
+        self.refpeakshapes = refpeakshapes
+        self.linbg = linbg
+        
+        self.make_model()
+        if runoninit:
+            self.do_fit()
+
+    def make_model(self):
+        self.modellist = []
+        self.parslist = []
+
+        #initialize both doublet models, and linear background if necessary
+        for k,v in self.refpeakshapes.items():
+            kdm, kdmpars = kalpha_doublet_model(prefix1=k+'_1_',prefix2=k+'_2_',**v)
+            self.modellist.append(kdm)
+            self.parslist.append(kdmpars)
+        if self.linbg:
+            self.modellist.append(models.LinearModel(prefix='linbg_'))
+            self.parslist.append(self.modellist[-1].make_params())
+
+        #compile joint model and parameters
+        self.model = self.modellist[0]
+        for mod in self.modellist[1:]:
+            self.model = self.model+mod
+        self.pars = self.parslist[0]
+        for par in self.parslist[1:]:
+            self.pars = self.pars+par
+
+        #set amplitudes to max of data for initial guess
+        for k in self.pars:
+            if '1_amplitude' in k:
+                self.pars[k].set(value=max(self.lineouty))
+
+        #set's intercept of the linear bg so that it has slope of 1, 
+        #with x-intercept near the data
+        if self.linbg:
+            self.pars['linbg_intercept'].set(value=-list(self.refpeakshapes.items())[0][1]['mainpeakpos'])
+
+    def do_fit(self):
+        #Hmm this is ugly and needs work, but is functional for now...
+        if self.fitrange is None and not self.weighted:
+            self.out = self.model.fit(self.lineouty,self.pars,x=self.lineoutx)
+        elif self.fitrange is None and self.weighted:
+            self.out = self.model.fit(self.lineouty,self.pars,x=self.lineoutx,weights = 1/np.sqrt(self.lineouty))
+        elif self.fitrange is not None and not self.weighted:
+            x, y = _take_lineout_erange([self.lineoutx,self.lineouty],[self.fitrange[0],self.fitrange[1]])
+            self.out = self.model.fit(y, self.pars, x = x)
+        elif self.fitrange is not None and self.weighted:
+            x, y = _take_lineout_erange([self.lineoutx,self.lineouty],[self.fitrange[0],self.fitrange[1]])
+            self.out = self.model.fit(y, self.pars, x = x, weights = 1/np.sqrt(y))
+
+        self.complist = collections.OrderedDict()
+        components = self.out.eval_components(x=self.lineoutx)
+        for k in self.refpeakshapes:
+            self.complist[k]=[self.lineoutx,components[k+'_1_']+components[k+'_2_']]
+            #self.complist.append([self.lineoutx,components[k+'_1_']+components[k+'_2_']])
+
+        if self.linbg:
+            self.complist['linbg']=[self.lineoutx,components['linbg_']]        
+
+    def calc_contributions(self,printenergy=False):
+        sumdict = collections.OrderedDict()
+        for k,v in self.complist.items():
+            if 'linbg' not in k:
+                sumdict[k]=np.sum(v[1])
+        tot = np.sum(list(sumdict.values()))
+
+        self.components=collections.OrderedDict()
+        for k,v in sumdict.items():
+            self.components[k]=v/tot
+
+        print('for sample '+self.sample)
+        for k,v in self.components.items():
+            print(k+': '+str(round(v*100,3))+'%')
+        if printenergy:
+            for k,v in self.out.best_values.items():
+                if '1_center' in k:
+                    print(k,' at ','{:6.2f}'.format(v))
+
+    def residual_plot(self,save=False,xrange=None,poisson=1,joined=False,plotcomponents=True,complabels=None,**kwargs):
+        if self.fitrange is None:
+            fxvalues = self.lineoutx
+        else:
+            fxvalues = _take_lineout_erange([self.lineoutx,self.lineouty],[self.fitrange[0],self.fitrange[1]])[0]
+        _residuals_plot(self.out,self.lineouty,self.lineoutx,fxvalues,
+            xrange=xrange,poisson=poisson,save=False,joined=False, **kwargs)
+
+    def plot_summary(self,show=True):
+        plt.plot(self.lineoutx,self.lineouty,label='data')
+        plt.plot(self.lineoutx,self.model.eval(self.pars,x=self.lineoutx),label='initial')
+        try:
+            plt.plot(self.lineoutx,self.out.eval(x=self.lineoutx),label='fit')
+        except:
+            plt.show()
+        else:
+            if show:
+                plt.show()
+
+    def save_fit_csv(self,filename):
+        savelist = [self.lineoutx,self.lineouty,self.out.best_fit]
+        _ = [savelist.append(c[1]) for c in self.complist.values()]
+        savedata = np.array(savelist)
+        headerlist = ['Energy(eV)','Rawdata (counts)','Fit']
+        _ = [headerlist.append(k+'comp') for k in self.complist.keys()]
+        np.savetxt(filename,np.transpose(savedata),delimiter=',',header=','.join(headerlist))
+        print('file saved as:',filename)
+
+
+    def pretty_plot_fit(self,xrange=None,save=False,joined=False):
+        data=[]
+
+        fittrace = go.Scatter(x=self.lineoutx,y=self.out.eval(x=self.lineoutx),xaxis='x',yaxis='y',name='fit',
+                             line=dict(color='rgba(0,0,0,0.7)'))
+
+        if joined:
+            datamode = 'lines+markers'
+        else:
+            datamode = 'markers'
+        datatrace = go.Scatter(x=self.lineoutx,y=self.lineouty,xaxis='x',yaxis='y',name='data',mode=datamode,
+                              marker = dict(size=5,color='rgba(200,0,0,0.8)'))
+
+        for trace in[datatrace,fittrace]:
+            data.append(trace)
+        
+        #colorlist = [
+    #     [0, 'rgb(150,0,90)'], [0.125, 'rgb(0,0,200)'],
+    #     [0.25, 'rgb(0,25,255)'], [0.375, 'rgb(0,152,255)'],
+    #     [0.5, 'rgb(44,255,150)'], [0.625, 'rgb(151,255,0)'],
+    #     [0.75, 'rgb(255,234,0)'], [0.875, 'rgb(255,111,0)'],
+    #     [1, 'rgb(255,0,0)']
+    # ]
+        complabels = list(self.complist.keys())
+        i=0
+        for tr in self.complist.values():
+            #data.append(go.Scatter(x=tr[0],y=tr[1],xaxis='x',yaxis='y',name=complabels[i],line=dict(color=colorlist[i][1])))#,visible='legendonly'))
+            data.append(go.Scatter(x=tr[0],y=tr[1],xaxis='x',yaxis='y',name=complabels[i]))#,visible='legendonly'))
+            i+=1
+        
+        layout=go.Layout(
+            xaxis=dict(domain=[0,1],anchor='y',title='Energy(ev)',range=xrange),
+            yaxis=dict(domain=[0,1],title='intensity'),
+            height=600)
+
+        data = data[::-1]
+        fig=go.Figure(data=data,layout=layout)
+        if save:
+            imagestr='svg'
+        else:
+            imagestr=None
+        offline.iplot(fig,image=imagestr)
+
+
+    def print_fit_summary(self,verbose=False):
+        self.calc_contributions()
+        fitbestvalues = self.out.best_values
+        if verbose:
+            print('Oxidized Kalpha1: '+str(fitbestvalues['oxidized_1_center'])+' eV')
+            print('Reduced Kalpha1: '+str(fitbestvalues['reduced_1_center'])+' eV')
