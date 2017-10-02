@@ -7,7 +7,7 @@ from . import camcontrol
 from . import config
 import os
 from arduinostepper import arduinostepper as ardstep
-from SpellmanUSB.SpellmanUSB import spellman
+import SpellmanUSB
 import xraycam
 
 def _check_for_data_files(prefixlist):
@@ -125,13 +125,13 @@ class ActionQueue(threading.Thread):
             self.current.block_until_complete()
 
         elif actionitem['action'] == 'disengage_high_voltage':
-            spellman.disengage_high_voltage()
+            SpellmanUSB.disengage_high_voltage()
 
         elif actionitem['action'] == 'engage_high_voltage':
-            spellman.engage_high_voltage()
+            SpellmanUSB.engage_high_voltage()
 
         elif actionitem['action'] == 'spellman_clear_setpoints':
-            spellman.clear_setpoints()
+            SpellmanUSB.clear_setpoints()
 
         elif actionitem['action'] == 'xraycam_shutdown':
             xraycam.shutdown()

@@ -157,11 +157,11 @@ def splitting(lmfitout,v1str,v2str):
     v2center = lmfitout.best_values[v2str+'_center']
     return v2center-v1center
 
-pkalpha2peakfitprofile = dict(v1_gamma=0.3,v1_center=2012.7,
-    v2_center=2013.5,bg_intercept=-2013)
+pkalpha2peakfitprofile = dict(v1_gamma = 0.3,v1_sigma = 0.3,v1_center = 2013.5,
+    v2_center = 2012.7,bg_intercept = -2013)
 
-skalpha2peakfitprofile = dict(v1_gamma=0.3,v1_center=2306.9,
-    v2_center=2307.7,bg_intercept=-2307)
+skalpha2peakfitprofile = dict(v1_gamma = 0.3,v1_sigma = 0.3,v1_center = 2307.7,
+    v2_center = 2306.9,bg_intercept = -2307)
 
 class do_peak_fit:
     
@@ -644,8 +644,8 @@ class TwoVoigtFit:
         self.pars['v2_sigma'].set(expr='v1_sigma')
         self.pars['v1_gamma'].set(vary=True)
         self.pars['v2_gamma'].set(expr='v1_gamma')
-        self.pars['v1_amplitude'].set(value=max(self.lineouty)/2)
-        self.pars['v2_amplitude'].set(value=max(self.lineouty))
+        self.pars['v1_amplitude'].set(value=max(self.lineouty))
+        self.pars['v2_amplitude'].set(value=max(self.lineouty)/2)
         for k,v in self.initialprofile.items():
             self.pars[k].set(value=v)
         
@@ -714,7 +714,7 @@ class TwoVoigtFit:
             xrange=xrange,poisson=poisson,save=False,joined=False, plotcomponents = plotcomponents, **kwargs)
         
     def spin_splitting(self):
-        split = self.out.best_values['v2_center']-self.out.best_values['v1_center']
+        split = self.out.best_values['v1_center']-self.out.best_values['v2_center']
         print('Ka1/Ka2 spin-split is : ',split)
 
     def print_summary(self,verbose=False):
@@ -722,14 +722,14 @@ class TwoVoigtFit:
         if verbose:
             for p in ('v1_center','v2_center','v1_gamma','v2_gamma','v1_sigma','v2_sigma'):
                 print(p+':\t'+str(fitbestvalues[p]))
-        split = fitbestvalues['v2_center']-fitbestvalues['v1_center']
-        ratio = fitbestvalues['v2_amplitude']/fitbestvalues['v1_amplitude']
+        split = fitbestvalues['v1_center']-fitbestvalues['v2_center']
+        ratio = fitbestvalues['v1_amplitude']/fitbestvalues['v2_amplitude']
         print('for sample: '+self.sample)
         print('\tsplitting:\t'+'{: 10.3f}'.format(split))
         print('\tratio:\t\t'+'{: 10.3f}'.format(ratio))
-        print('\tka1:\t\t'+'{: 10.3f}'.format(fitbestvalues['v2_center']))
-        print('\tgamma1:\t\t'+'{: 10.3f}'.format(fitbestvalues['v2_gamma']))
-        print('\tsigma1:\t\t'+'{: 10.3f}'.format(fitbestvalues['v2_sigma']))
+        print('\tka1:\t\t'+'{: 10.3f}'.format(fitbestvalues['v1_center']))
+        print('\tgamma1:\t\t'+'{: 10.3f}'.format(fitbestvalues['v1_gamma']))
+        print('\tsigma1:\t\t'+'{: 10.3f}'.format(fitbestvalues['v1_sigma']))
         print('\tredchi:\t\t'+'{: 10.3f}'.format(self.out.redchi))
 
 class KalphaLinearCombinationFit:
