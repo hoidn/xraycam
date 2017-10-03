@@ -1,11 +1,13 @@
+import dill
+import numpy as np
+import datetime
 from . import camcontrol
 from . import utils
-import numpy as np
 from scipy.interpolate import UnivariateSpline
-from xraycam.camcontrol import _rebin_spectrum
 from scipy.ndimage.filters import gaussian_filter as gfilt
+from xraycam.camcontrol import _rebin_spectrum
 from xraycam.camcontrol import plt
-import dill
+import xraycam.xesfitting as xfit
 from lmfit import models
 
 def get_hot_pixels(darkrun = None, threshold = 0):
@@ -239,7 +241,7 @@ def _take_lineout_erange(lineout,erange):
     indices = (energies > erange[0]) & (energies < erange[1])
     return np.array([energies[indices],intensities[indices]])
 
-def _linear_background_subtraction(lineout, excluderegions, show = False, calcsnr = False):
+def _linear_background_subtraction(lineout, excluderegions, show = False, calcsigbgratio = False):
     #remove exlusion regions
     bglineoutx,bglineouty = np.copy(lineout)
     for exclude in excluderegions:
@@ -268,7 +270,7 @@ def _linear_background_subtraction(lineout, excluderegions, show = False, calcsn
         plt.figures[0].traces[-1]['visible']='legendonly'
         plt.show()
 
-    if calcsnr:
+    if calcsigbgratio:
         maxindex = np.argmax(lineout[1])
         signalmax = lineout[1][maxindex]
         bg = out.eval(x=lineout[0][maxindex])
@@ -411,3 +413,19 @@ def is_outlier(points, thresh=3.5):
     modified_z_score = 0.6745 * diff / med_abs_deviation
 
     return modified_z_score > thresh
+
+def peakshift_from_fits(runset, parameters, plot = True, show = True):
+    shift = []
+    for r in runset:
+        try:
+            fit = xfit.do_peak_fit(r.get_lineout(**parameters),sample=r.name, runoninit=False)
+            fit.run_fit()
+            shift.append([datetime.datetime.fromtimestamp(r.zrun._time_start)-datetime.timedelta(hours=3), fit.out.best_values['v1_center']])
+        except ValueError:
+            print('error, skipped run ',r.name)
+    shift = np.array(shift)
+    if plot:
+        plt.plot(*shift.transpose(), label='peak pos vs. time')
+        if show:
+            plt.show()
+    return shift

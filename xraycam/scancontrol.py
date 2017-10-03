@@ -176,6 +176,14 @@ class ActionQueue(threading.Thread):
                 'rootprefix':rootprefix
             })
 
+    def time_left_in_queue(self):
+        durations=[]
+        for a in self.queue:
+            if a['action'] == 'datarun':
+                durations.append(a['runkwargs']['duration'])
+        print('{} sec in queue'.format(np.sum(durations)))
+        return np.sum(durations)
+
 class MultipleRuns:
     """Class that takes multiple DataRuns with the same run parameters. Useful
     when taking long exposures to monitor for possible changes in signal, or to

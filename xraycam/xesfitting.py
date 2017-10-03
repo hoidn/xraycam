@@ -4,7 +4,12 @@ import plotly.offline as offline
 import plotly.graph_objs as go
 import numpy as np
 from xraycam.camcontrol import plt
-from xraycam.camalysis import _take_lineout_erange
+# from xraycam.camalysis import _take_lineout_erange
+
+def _take_lineout_erange(lineout,erange):
+    energies, intensities = lineout
+    indices = (energies > erange[0]) & (energies < erange[1])
+    return np.array([energies[indices],intensities[indices]])
 
 def norm(y,mode='peak'):
     if mode=='peak':
@@ -656,6 +661,7 @@ class TwoVoigtFit:
             self.out = self.model.fit(self.lineouty,self.pars,x=self.lineoutx,weights = 1/np.sqrt(self.lineouty))
         elif self.fitrange is not None and not self.weighted:
             x, y = _take_lineout_erange([self.lineoutx,self.lineouty],[self.fitrange[0],self.fitrange[1]])
+            self.out = self.model.fit(y, self.pars, x = x)
         elif self.fitrange is not None and self.weighted:
             x, y = _take_lineout_erange([self.lineoutx,self.lineouty],[self.fitrange[0],self.fitrange[1]])
             self.out = self.model.fit(y, self.pars, x = x, weights = 1/np.sqrt(y))
