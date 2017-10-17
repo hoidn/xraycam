@@ -135,11 +135,14 @@ def _residuals_plot(lmfitoutput,rawdata,xvalues,fxvalues,xrange=None,poisson=Fal
         for i, c in enumerate(components):
             data.append(go.Scatter(x=xvalues,y=components[c],xaxis='x',yaxis='y2',name=complabels[i]))#,visible='legendonly'))
     else:
-        if complabels is None:
-            complabels = plotcomponents.keys()
-        components = plotcomponents.values()
-        for i, c in enumerate(components):
-            data.append(go.Scatter(x=c[0],y=c[1],xaxis='x',yaxis='y2',name=complabels[i]))
+        for c,v in plotcomponents.items():
+            data.append(go.Scatter(x=v[0],y=v[1],xaxis='x',yaxis='y2',name=c))
+
+        # if complabels is None:
+        #     complabels = plotcomponents.keys()
+        # components = plotcomponents.values()
+        # for i, c in enumerate(components):
+        #     data.append(go.Scatter(x=c[0],y=c[1],xaxis='x',yaxis='y2',name=complabels[i]))
     
     layout=go.Layout(
         xaxis=dict(domain=[0,1],anchor='y2',title='Energy(ev)',range=xrange),
@@ -826,13 +829,14 @@ class KalphaLinearCombinationFit:
                 if '1_center' in k:
                     print(k,' at ','{:6.2f}'.format(v))
 
-    def residual_plot(self,save=False,xrange=None,poisson=1,joined=False,plotcomponents=True,complabels=None,**kwargs):
+    def residual_plot(self,save=False,xrange=None,poisson=1,joined=False,plotcomponents='frommodel',complabels=None,**kwargs):
         if self.fitrange is None:
             fxvalues = self.lineoutx
         else:
             fxvalues = _take_lineout_erange([self.lineoutx,self.lineouty],[self.fitrange[0],self.fitrange[1]])[0]
         _residuals_plot(self.out,self.lineouty,self.lineoutx,fxvalues,
-            xrange=xrange,poisson=poisson,save=False,joined=False, **kwargs)
+            xrange=xrange,poisson=poisson,save=False,joined=False, 
+            plotcomponents = self.complist, **kwargs)
 
     def plot_summary(self,show=True):
         plt.plot(self.lineoutx,self.lineouty,label='data')
