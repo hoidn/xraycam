@@ -414,12 +414,12 @@ def is_outlier(points, thresh=3.5):
 
     return modified_z_score > thresh
 
-def peakshift_from_fits(runset, parameters, plot = True, show = True):
+def peakshift_from_fits(runset, parameters, plot = True, show = True, weighted = True, fitrange = None, nan_policy = 'omit'):
     shift = []
     for r in runset:
         try:
-            fit = xfit.do_peak_fit(r.get_lineout(**parameters),sample=r.name, runoninit=False)
-            fit.run_fit()
+            fit = xfit.TwoVoigtFit(r.get_lineout(**parameters),sample=r.name, runoninit=False, weighted = weighted, fitrange = fitrange)
+            fit.do_fit(fit_kws = {'nan_policy':nan_policy})
             shift.append([datetime.datetime.fromtimestamp(r.zrun._time_start)-datetime.timedelta(hours=3), fit.out.best_values['v1_center']])
         except ValueError:
             print('error, skipped run ',r.name)

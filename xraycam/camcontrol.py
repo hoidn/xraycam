@@ -295,6 +295,7 @@ class Frame:
         return self.data
 
     def __add__(self, other):
+        #TODO, check if frames have same photon value
         if self.name and other.name:
             name =  _longest_common_substring(self.name, other.name)
         else:
