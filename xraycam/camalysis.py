@@ -9,6 +9,7 @@ from xraycam.camcontrol import _rebin_spectrum
 from xraycam.camcontrol import plt
 import xraycam.xesfitting as xfit
 from lmfit import models
+from xraycam import config
 
 def get_hot_pixels(darkrun = None, threshold = 0):
     """
@@ -33,45 +34,27 @@ def fwhm(arr1d):
     r1, r2 = spline.roots()
     return r2 - r1
 
-def calc_bragg_angle(energy,braggorder=1):
-    """
-    calculates bragg angle from energy given in eV.  Currently specific to si111 2d spacing.
-    """
-    si111_2dspacing=6.27118
-    return 180*np.arcsin(12398.4*braggorder/(si111_2dspacing*energy))/np.pi
 
-def new_calc_bragg_angle(energy,crystal2d=6.27118,braggorder=1):
+def calc_bragg_angle(energy,crystal2d=6.27118,braggorder=1):
     """
-    Calculates bragg angle from energy given in eV and the crystal 2d spacing.
+    Calculates bragg angle from energy given in eV and the crystal 2d spacing. Default is Si111.
     """
     return 180*np.arcsin(12398.4*braggorder/(crystal2d*energy))/np.pi 
 
 def calc_bragg_energy(angle,crystal2d=6.27118,braggorder=1):
     """
-    Calculates bragg angle from energy given in eV and the crystal 2d spacing.
+    Calculates bragg angle from energy given in eV and the crystal 2d spacing. Default is Si111.
     """
     wavelength = crystal2d*np.sin(angle*np.pi/180)/braggorder
     return 12398.4/wavelength
-    
-def energy_from_x_position(bragg,xpx,rebinparam=1,braggorder=1):
-    """
-    This function takes a bragg angle 'bragg', which is the bragg angle for a known
-    energy on the camera, and takes an x position which is left (negative) or right (positive)
-     of the central energy, in pixels 'xpx',
-    and returns the energy of the x-ray which will be refocused to that position in the Rowland geometry.
-    
-    It is specific to Rowland diameter = 10cm, pixel size = 2.9 microns, and camera tangent to the circle.
-    """
-    pizel_size=2.9e-3 # NOTE: changed for new camera
-    xpos=xpx*pizel_size*rebinparam
-    return braggorder*1000*1.97705*np.sqrt(1+(xpos*np.cos(np.pi*bragg/90)+50*np.sin(np.pi*bragg/90))**2/(50-50*np.cos(np.pi*bragg/90)+xpos*np.sin(np.pi*bragg/90))**2)
 
-def new_energy_from_x_position(bragg,xpx,rebinparam=1,braggorder=1,rowlandr=100):
+def energy_from_x_position(bragg,xpx,rebinparam=1,braggorder=1,rowlandr=100,crystal2d=6.27118):
     """
     This function takes a bragg angle 'bragg', which is the bragg angle for a known
     energy on the camera, and takes an x position which is left (negative) or right (positive)
      of the central energy, in pixels 'xpx',
     and returns the energy of the x-ray which will be refocused to that position in the Rowland geometry.
+    Default crystal is assumed to be Si111.
     
     It is specific to Rowland diameter = 10cm, pixel size = 2.9 microns, and assumes the camera is tangent to the circle.
     """
@@ -84,8 +67,7 @@ def new_energy_from_x_position(bragg,xpx,rebinparam=1,braggorder=1,rowlandr=100)
     circvec = np.dot(rotmatrix,camvec)
     crystalvec = circvec+np.array([0, rowlandr/2])
     newtheta = 90-np.arctan2(crystalvec[0],crystalvec[1])*180/np.pi
-    return calc_bragg_energy(newtheta)
-
+    return calc_bragg_energy(newtheta,crystal2d = crystal2d, braggorder = braggorder)
 
 def add_energy_scale(lineout,known_energy,known_bin='peak',rebinparam=1,camerainvert=True,braggorder=1,**kwargs):
     """
@@ -102,24 +84,16 @@ def add_energy_scale(lineout,known_energy,known_bin='peak',rebinparam=1,camerain
     indexfromcenter=np.array(range(len(lineout)))-centerindex
     if camerainvert == True:
             indexfromcenter=-indexfromcenter # if camera gets flipped upside down, just reverse the indices
-    return (energy_from_x_position(calc_bragg_angle(known_energy,braggorder),indexfromcenter,rebinparam,braggorder),lineout)
 
-def new_add_energy_scale(lineout,known_energy,known_bin='peak',rebinparam=1,camerainvert=True,braggorder=1,**kwargs):
-    """
-    Returns an np array of [energies,lineout], by either applying a known energy to the max of the dataset, or to a specified bin.
-    """
-    if known_bin == None:
-        centerindex=np.argmax(gfilt(lineout,3)) # if known_bin not provided, set energy to max of lineout
-        # note to self, I was worried that gfilt might change the length of the list, but it doesn't.
-    elif known_bin == 'peak':
-        centerindex = get_peaks(np.array([list(range(len(lineout))),lineout]))[0]
-    else:
-        #centerindex=round(known_bin/rebinparam) # else set energy to be at known bin position
-        centerindex=known_bin/rebinparam #try without rounding 2.9.17
-    indexfromcenter=np.array(range(len(lineout)))-centerindex
-    if camerainvert == True:
-            indexfromcenter=-indexfromcenter # if camera gets flipped upside down, just reverse the indices
-    return (new_energy_from_x_position(calc_bragg_angle(known_energy,braggorder),indexfromcenter,rebinparam,braggorder),lineout)
+    #use crystal 2d from config file, can be set with config.set_crystal_config()
+    return (energy_from_x_position(
+        calc_bragg_angle(known_energy,braggorder),
+        indexfromcenter,
+        rebinparam,
+        braggorder =config.crystalconfig['order'],
+        crystal2d = config.crystalconfig['2d']
+        ),
+        lineout)
     
 def fwhm_lineout(lineout,fwhm_smooth=2):
     """

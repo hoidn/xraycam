@@ -11,6 +11,7 @@ saveconfig = {
 	'Directory':os.path.expanduser('~/xraycam/examples/cache/')
 }
 
+# Config for camera settings on bootup
 cameraconfig = {
     'Gain':{
         'controlname':ASI_GAIN,
@@ -27,6 +28,26 @@ cameraconfig = {
     'ImageType':'RAW8'
 }
 
+
+# Config for crystal
+crystalconfig = {
+    '2d':crystal2d['si111'],
+    'order':1
+}
+
+def set_crystal_config(crystal='si111', braggorder=1):
+    global crystalconfig
+    crystalconfig = {'2d':crystal2d[crystal],'order':braggorder}
+
+#From x-ray data booklet
+crystal2d = {
+    'si111':6.2712,
+    'si220':3.8403117,
+    'ge220':4.00
+}
+
+
+# Config for sensor and data energy scaling
 sensorsettings = {}
 datasettings = {}
 
