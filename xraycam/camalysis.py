@@ -87,7 +87,10 @@ def add_energy_scale(lineout,known_energy,known_bin='peak',rebinparam=1,camerain
 
     #use crystal 2d from config file, can be set with config.set_crystal_config()
     return (energy_from_x_position(
-        calc_bragg_angle(known_energy,braggorder),
+        calc_bragg_angle(known_energy,
+                        crystal2d=config.crystalconfig['2d'],
+                        braggorder =config.crystalconfig['order']
+                        ),
         indexfromcenter,
         rebinparam,
         braggorder =config.crystalconfig['order'],

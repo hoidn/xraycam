@@ -30,6 +30,13 @@ cameraconfig = {
 
 
 # Config for crystal
+# 2d spacings from x-ray data booklet
+crystal2d = {
+    'si111':6.2712,
+    'si220':3.8403117,
+    'ge220':4.00
+}
+
 crystalconfig = {
     '2d':crystal2d['si111'],
     'order':1
@@ -38,13 +45,6 @@ crystalconfig = {
 def set_crystal_config(crystal='si111', braggorder=1):
     global crystalconfig
     crystalconfig = {'2d':crystal2d[crystal],'order':braggorder}
-
-#From x-ray data booklet
-crystal2d = {
-    'si111':6.2712,
-    'si220':3.8403117,
-    'ge220':4.00
-}
 
 
 # Config for sensor and data energy scaling
