@@ -333,6 +333,7 @@ class AngleScan:
         camcontrol.plt.show()
 
     def angle_plot(self,start=0,end=-1,show=True,**kwargs):
+        #TODO: add errorbars so weak samples are less ambiguous
         if self.runset.dataruns is None:
             print('Error: datafiles not loaded.')
         else:#TODO: sort plot based on angles, in case run gets iserted with angle out of order
@@ -432,12 +433,15 @@ class CameraScan:
         self.actionqueue.stop()
 
     def insert_scan(self,movevalue):
-        self.distlist.append(movevalue)
+        self.distlist = np.append(self.distlist, np.float64(movevalue))#float64 needed to match output of np.arange
         p = self.prefix + '_{:.2f}deg'.format(movevalue)
         self.prefixlist.append(p)
-        assert self.actionqueue is None or self.actionqueue._finished == True, \
-        'Error, self.actionqueue is not empty or finished. Must not be in the\
-         middle of a scan to insert another value.'
+        try:
+            assert self.actionqueue is None or self.actionqueue._finished == True, \
+            'Error, self.actionqueue is not empty or finished. Must not be in the\
+             middle of a scan to insert another value.'
+        except AttributeError:
+            print('AttributeError excepted, actionqueue did not exist yet.  Creating and starting scan.')
         self.actionqueue = ActionQueue()
         self.make_queue_entry(movevalue,p)
         self.actionqueue.start()

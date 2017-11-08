@@ -52,6 +52,7 @@ sensorsettings = {}
 datasettings = {}
 
 def set_detector_settings(emissionline):
+    '''Set based on tests with gain:213'''
     sensorsettings.clear()
     datasettings.clear()
     if emissionline == 'skalpha':
@@ -67,4 +68,18 @@ def set_detector_settings(emissionline):
         sensorsettings['window_max'] = 114
         datasettings['photon_value'] = 110
         datasettings['avg_energy'] = 2014
+        datasettings['emissionline'] = emissionline
+    if emissionline == 'skbeta':
+        sensorsettings['threshold']=0
+        sensorsettings['window_min']=130
+        sensorsettings['window_max']=142
+        datasettings['photon_value']=136
+        datasettings['avg_energy']=2464
+        datasettings['emissionline'] = emissionline
+    if emissionline == 'tclalpha':
+        sensorsettings['threshold']=0
+        sensorsettings['window_min']=129
+        sensorsettings['window_max']=137
+        datasettings['photon_value']=133
+        datasettings['avg_energy']=2424
         datasettings['emissionline'] = emissionline

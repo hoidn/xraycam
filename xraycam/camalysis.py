@@ -105,7 +105,8 @@ def fwhm_lineout(lineout,fwhm_smooth=2):
     x, y = lineout
     y = gfilt(y,fwhm_smooth)
     spline = UnivariateSpline(x, y - np.max(y)/2, s = 0)
-    r1, r2 = spline.roots()
+    roots = spline.roots()
+    r1, r2 = roots[0], roots[-1]
     return r2 - r1
 
 def center_of_masses(arr2d):
@@ -311,7 +312,7 @@ def _linear_background_subtraction(lineout, excluderegions, show = False, calcsi
     
     return np.array([lineoutx,lineouty])
 
-def explore_best_region(data,step=100,width=200, energy =(None,None), normalize = None):
+def explore_best_region(data,step=100,width=200, energy =(None,None), normalize = None, rebin = 1):
     
     try:
         frame = data.get_frame()
@@ -324,14 +325,14 @@ def explore_best_region(data,step=100,width=200, energy =(None,None), normalize 
     for r in [[i,i+width] for i in np.arange(0,frame.data.shape[0]-width,step)]:
         try:
             fwhm = fwhm_lineout(frame.get_lineout(yrange = r, 
-                           normalize = normalize, energy = energy))
+                           normalize = normalize, energy = energy, rebin = rebin))
             lab = str(r)+'-fwhm {:.3f}'.format(fwhm)
         except (RuntimeError, ValueError):
             fwhm = 'CalcErr'
             lab = str(r)+'-fwhm '+fwhm
         fwhmlist.append([r,fwhm])
         frame.plot_lineout(yrange = r, label = lab, show = False, 
-                           normalize = normalize, energy = energy)
+                           normalize = normalize, energy = energy, rebin = rebin)
     
     #Cleanup and label plot
     for tr in plt.figures[0].traces:
