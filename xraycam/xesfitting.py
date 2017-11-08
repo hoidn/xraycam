@@ -788,18 +788,18 @@ class KalphaLinearCombinationFit:
         if self.linbg:
             self.pars['linbg_intercept'].set(value=-list(self.refpeakshapes.items())[0][1]['mainpeakpos'])
 
-    def do_fit(self):
+    def do_fit(self,fit_kws = {}):
         #Hmm this is ugly and needs work, but is functional for now...
         if self.fitrange is None and not self.weighted:
-            self.out = self.model.fit(self.lineouty,self.pars,x=self.lineoutx)
+            self.out = self.model.fit(self.lineouty,self.pars,x=self.lineoutx, fit_kws=fit_kws)
         elif self.fitrange is None and self.weighted:
-            self.out = self.model.fit(self.lineouty,self.pars,x=self.lineoutx,weights = 1/np.sqrt(self.lineouty))
+            self.out = self.model.fit(self.lineouty,self.pars,x=self.lineoutx,weights = 1/np.sqrt(self.lineouty), fit_kws=fit_kws)
         elif self.fitrange is not None and not self.weighted:
             x, y = _take_lineout_erange([self.lineoutx,self.lineouty],[self.fitrange[0],self.fitrange[1]])
-            self.out = self.model.fit(y, self.pars, x = x)
+            self.out = self.model.fit(y, self.pars, x = x, fit_kws=fit_kws)
         elif self.fitrange is not None and self.weighted:
             x, y = _take_lineout_erange([self.lineoutx,self.lineouty],[self.fitrange[0],self.fitrange[1]])
-            self.out = self.model.fit(y, self.pars, x = x, weights = 1/np.sqrt(y))
+            self.out = self.model.fit(y, self.pars, x = x, weights = 1/np.sqrt(y), fit_kws=fit_kws)
 
         self.complist = collections.OrderedDict()
         components = self.out.eval_components(x=self.lineoutx)

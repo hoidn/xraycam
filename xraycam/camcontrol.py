@@ -402,31 +402,34 @@ def save_lineout_csv(datarun,filename,tosharedfolder=False,**kwargs):
     print('file saved as: ',filename)
 
 # Below are a couple of scripts for importing legacy data, in which the data was saved as: [_initial_array,_final_array,_run_parameters,_time_start,_total_time]
-def import_legacy(prefix,directory='/home/xrays/xraycam/examples/cache/'):
-    attributes = ['_time_start','_total_time','_run_parameters']
+def import_legacy(prefix,directory='/home/xrays/xraycam/examples/cache/',attributes=None,photon_value=None):
+    if attributes is None:
+        attributes = ['_time_start','_total_time','_run_parameters']
     params = {}
     for a in attributes:
         with open(directory+prefix+a,'rb') as f:
             params[a]=(dill.load(f))
     arr = np.load(directory+prefix+'_final_array')
-    frame = xraycam.camcontrol.Frame(arr,
-                                     time=params['_total_time'],
-                                     photon_value=params['_run_parameters']['photon_value'])
+
+    if '_run_parameters' in params:
+        frame = Frame(arr,time=params['_total_time'],photon_value=params['_run_parameters']['photon_value'])
+    else:
+        frame = Frame(arr,time=params['_total_time'],photon_value=photon_value)
     frame.runparams = params
     return frame
 
-def import_runset_legacy(prefix,runnumlist,directory='/home/xrays/xraycam/examples/cache/', dosum=True):
+def import_runset_legacy(prefix,runnumlist,directory='/home/xrays/xraycam/examples/cache/', dosum=True, attributes=None,photon_value=None):
     prefixes = [prefix+str(i) for i in runnumlist]
     
     if dosum:
         firstprefix = prefixes.pop(0)
-        frametot = import_legacy(firstprefix)
+        frametot = import_legacy(firstprefix,directory=directory,attributes=attributes,photon_value=photon_value)
         for p in prefixes:
-            frametot += import_legacy(p)
+            frametot += import_legacy(p,directory=directory,attributes=attributes,photon_value=photon_value)
         frame = frametot
     else:
         frames = []
         for p in prefixes:
-            frames.append(import_legacy(p))
+            frames.append(import_legacy(p,directory=directory,attributes=attributes,photon_value=photon_value))
         frame = frames
     return frame
