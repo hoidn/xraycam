@@ -115,6 +115,7 @@ class ZRun:
     def __init__(self, run_prefix = '', window_min = 0, window_max = 255, 
         threshold = 0, decluster = True, duration = None, loadonly = False, 
         saveonstop = True, photon_value = 1, **kwargs):
+    #TODO: fix photon-value handling (10.25.17)
 
         _validate_savedir()
         
