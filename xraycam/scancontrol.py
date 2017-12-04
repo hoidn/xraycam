@@ -6,7 +6,8 @@ import numpy as np
 from . import camcontrol
 from . import config
 import os
-from arduinostepper import arduinostepper as ardstep
+# from arduinostepper import arduinostepper as ardstep
+import GrblMotors as ardstep
 #Alex comment out above line and uncomment below line to use arcus drivers.
 # from arcusmotors import driver as ardstep
 import SpellmanUSB
