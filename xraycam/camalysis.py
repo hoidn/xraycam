@@ -448,6 +448,8 @@ def peakshift_from_fits(runset, parameters, plot = True, show = True, weighted =
     for r in runset:
         try:
             fit = xfit.TwoVoigtFit(r.get_lineout(**parameters),sample=r.name, runoninit=False, weighted = weighted, fitrange = fitrange)
+            fit.pars['v1_sigma'].set(min=0.000001)
+            fit.pars['v1_gamma'].set(min=0.000001)
             fit.do_fit(fit_kws = {'nan_policy':nan_policy})
             shift.append([datetime.datetime.fromtimestamp(r.zrun._time_start)-datetime.timedelta(hours=3), fit.out.best_values['v1_center']])
         except ValueError:

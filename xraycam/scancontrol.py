@@ -179,6 +179,11 @@ class ActionQueue(threading.Thread):
                 'rootprefix':rootprefix
             })
 
+    def append_shutdown_command(self, shutdowncamera = False):
+        self.queue.append({'action':'disengage_high_voltage'})
+        if shutdowncamera:
+            self.queue.append({'action':'xraycam_shutdown'})
+
     def time_left_in_queue(self):
         durations=[]
         for a in self.queue:
