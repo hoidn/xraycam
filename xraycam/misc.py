@@ -150,6 +150,68 @@ def voigt_fwhm(lmfitoutput,prefix = 'La1_'):
     c0, c1 = 2.0056, 1.0593
     return fwhmG*(1-c0*c1+np.sqrt(phi**2+2*c1*phi+c0**2*c1**2))
 
+def pretty_matplotlib_kalpha_lcf(lcffit, plotxrange=[2009,2018], plotcomponents=['data','fit','components'], show=True, legend = True, title=None, interiorlabel = True, plotyrange = None):
+    fit = lcffit.out
+    xs = fit.userkws['x']
+    lineout = np.array([lcffit.lineoutx,lcffit.lineouty])
+    fxs,_ = camalysis._take_lineout_erange(lineout,lcffit.fitrange)
+
+    comps = fit.eval_components(x=xs)
+    
+    if 'data' in plotcomponents:
+        mplt.plot(*lineout,'o',markersize=3,label=lcffit.sample+' data')
+    if 'fit' in plotcomponents:
+        mplt.plot(xs,fit.eval(x=xs),'k',label=lcffit.sample+' fit')
+    
+    if 'components' in plotcomponents:
+        for k, v in lcffit.complist.items():
+            mplt.plot(*v,'--',label=lcffit.sample+' '+k)
+
+    mplt.xlim(*plotxrange)
+    if plotyrange is not None:
+        mplt.ylim(*plotyrange)
+    mplt.ylabel('Intensity')
+    mplt.xlabel('Energy (eV)')
+    ax=mplt.gca()
+    ax.get_yaxis().set_ticks([])
+    if title:
+        ax.text(0.02,0.95,
+                r'$\mathregular{'+lcffit.sample+r'}$'+' '+r'$\mathregular{K\alpha}$ XES',
+               verticalalignment='top',horizontalalignment='left',transform=ax.transAxes,fontsize=12)
+    ax.get_xaxis().get_major_formatter().set_useOffset(False)
+    if legend:
+        mplt.legend(fontsize=9)
+    if interiorlabel:
+        lcffit.calc_contributions()
+        ax.text(0.02,0.8,
+        ('Reduced ({:.2f}%) '.format(100*lcffit.components['reduced'])+
+        '\n  '
+         r'$\mathregular{K\alpha_1}$:'+'{:.2f}'.format(lcffit.out.best_values['reduced_1_center'])+'\n\n'
+         'Oxidized ({:.2f}%) '.format(100*lcffit.components['oxidized'])+
+        '\n  '
+         r'$\mathregular{K\alpha_1}$:'+'{:.2f}'.format(lcffit.out.best_values['oxidized_1_center'])
+         ),
+       verticalalignment='top',horizontalalignment='left',transform=ax.transAxes,fontsize=10)
+    if show:
+        mplt.show()
+
+def check_fit_progression(runset, parameters, partialfit, of='reduced', plot=True):
+    shift=[]
+    for r in runset:
+        try:
+            fit = partialfit(r.get_lineout(**parameters))
+            fit.do_fit(fit_kws={'nan_policy':'omit'})
+            fit.calc_contributions()
+            shift.append([datetime.datetime.fromtimestamp(r.zrun._time_start)-datetime.timedelta(hours=3), 
+                          fit.components[of]])
+        except ValueError:
+            print('error, skipped run ',r.name)
+    shift = np.array(shift)
+    if plot:
+        plt.plot(*shift.transpose(), label='peak pos vs. time')
+        if show:
+            plt.show()
+    return shift
 
 ##### Below are tools developed in the efforts of analyzing the biochar data.
 ##### The functions allow for taking subgroups of a large runset, and fitting
