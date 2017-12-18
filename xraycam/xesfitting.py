@@ -810,7 +810,7 @@ class KalphaLinearCombinationFit:
         if self.linbg:
             self.complist['linbg']=[self.lineoutx,components['linbg_']]        
 
-    def calc_contributions(self,printenergy=False):
+    def calc_contributions(self,verbose = False, printenergy=False):
         sumdict = collections.OrderedDict()
         for k,v in self.complist.items():
             if 'linbg' not in k:
@@ -821,13 +821,14 @@ class KalphaLinearCombinationFit:
         for k,v in sumdict.items():
             self.components[k]=v/tot
 
-        print('for sample '+self.sample)
-        for k,v in self.components.items():
-            print(k+': '+str(round(v*100,3))+'%')
-        if printenergy:
-            for k,v in self.out.best_values.items():
-                if '1_center' in k:
-                    print(k,' at ','{:6.2f}'.format(v))
+        if verbose:
+            print('for sample '+self.sample)
+            for k,v in self.components.items():
+                print(k+': '+str(round(v*100,3))+'%')
+            if printenergy:
+                for k,v in self.out.best_values.items():
+                    if '1_center' in k:
+                        print(k,' at ','{:6.2f}'.format(v))
 
     def residual_plot(self,save=False,xrange=None,poisson=1,joined=False,plotcomponents='frommodel',complabels=None,**kwargs):
         if self.fitrange is None:
