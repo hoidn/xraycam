@@ -5,7 +5,7 @@ from . import camalysis
 import numpy as np
 from .camcontrol import plt
 
-def plot_counts_vs_time(runset,show=True, label='counts vs. time', xrange=[400,650]):
+def plot_counts_vs_time(runset,show=True, label='counts vs. time', xrange=None):
     times=[]
     counts=[]
     for r in runset:

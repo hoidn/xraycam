@@ -51,35 +51,62 @@ def set_crystal_config(crystal='si111', braggorder=1):
 sensorsettings = {}
 datasettings = {}
 
+detectordictionary = {
+    'skalpha':{
+        'sensorsettings':{
+            'threshold':0,
+            'window_min':120,
+            'window_max':132
+        },
+        'detectorsettings':{
+            'photon_value':126,
+            'avg_energy' = 2307
+        }
+    }
+    'pkalpha':{
+        'sensorsettings':{
+            'threshold':0,
+            'window_min':104,
+            'window_max':114
+        },
+        'detectorsettings':{
+            'photon_value':110,
+            'avg_energy' = 2014
+        }
+    }
+}
+
 def set_detector_settings(emissionline):
     '''Set based on tests with gain:213'''
     sensorsettings.clear()
     datasettings.clear()
-    if emissionline == 'skalpha':
-        sensorsettings['threshold'] = 0
-        sensorsettings['window_min'] = 120
-        sensorsettings['window_max'] = 132
-        datasettings['photon_value'] = 126
-        datasettings['avg_energy'] = 2307
-        datasettings['emissionline'] = emissionline
-    if emissionline == 'pkalpha':
-        sensorsettings['threshold'] = 0
-        sensorsettings['window_min'] = 104
-        sensorsettings['window_max'] = 114
-        datasettings['photon_value'] = 110
-        datasettings['avg_energy'] = 2014
-        datasettings['emissionline'] = emissionline
-    if emissionline == 'skbeta':
-        sensorsettings['threshold']=0
-        sensorsettings['window_min']=130
-        sensorsettings['window_max']=142
-        datasettings['photon_value']=136
-        datasettings['avg_energy']=2464
-        datasettings['emissionline'] = emissionline
-    if emissionline == 'tclalpha':
-        sensorsettings['threshold']=0
-        sensorsettings['window_min']=129
-        sensorsettings['window_max']=137
-        datasettings['photon_value']=133
-        datasettings['avg_energy']=2424
-        datasettings['emissionline'] = emissionline
+    sensorsettings = detectordictionary[emissionline]['sensorsettings']
+    datasettings = detectordictionary[emissionline]['detectorsettings']
+    # if emissionline == 'skalpha':
+    #     sensorsettings['threshold'] = 0
+    #     sensorsettings['window_min'] = 120
+    #     sensorsettings['window_max'] = 132
+    #     datasettings['photon_value'] = 126
+    #     datasettings['avg_energy'] = 2307
+    #     datasettings['emissionline'] = emissionline
+    # if emissionline == 'pkalpha':
+    #     sensorsettings['threshold'] = 0
+    #     sensorsettings['window_min'] = 104
+    #     sensorsettings['window_max'] = 114
+    #     datasettings['photon_value'] = 110
+    #     datasettings['avg_energy'] = 2014
+    #     datasettings['emissionline'] = emissionline
+    # if emissionline == 'skbeta':
+    #     sensorsettings['threshold']=0
+    #     sensorsettings['window_min']=130
+    #     sensorsettings['window_max']=142
+    #     datasettings['photon_value']=136
+    #     datasettings['avg_energy']=2464
+    #     datasettings['emissionline'] = emissionline
+    # if emissionline == 'tclalpha':
+    #     sensorsettings['threshold']=0
+    #     sensorsettings['window_min']=129
+    #     sensorsettings['window_max']=137
+    #     datasettings['photon_value']=133
+    #     datasettings['avg_energy']=2424
+    #     datasettings['emissionline'] = emissionline
