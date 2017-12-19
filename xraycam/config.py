@@ -1,5 +1,6 @@
 import os
 from zwoasi import ASI_GAIN, ASI_EXPOSURE, ASI_HIGH_SPEED_MODE
+from copy import deepcopy
 
 #Directory for camera drivers
 ZWO_LIB_DIRECTORY = '/home/xrays/zwodriver/lib/x64/libASICamera2.so'
@@ -60,9 +61,9 @@ detectordictionary = {
         },
         'detectorsettings':{
             'photon_value':126,
-            'avg_energy' = 2307
+            'avg_energy':2307
         }
-    }
+    },
     'pkalpha':{
         'sensorsettings':{
             'threshold':0,
@@ -71,17 +72,21 @@ detectordictionary = {
         },
         'detectorsettings':{
             'photon_value':110,
-            'avg_energy' = 2014
+            'avg_energy':2014
         }
     }
 }
 
 def set_detector_settings(emissionline):
     '''Set based on tests with gain:213'''
+    global sensorsettings
+    global datasettings
     sensorsettings.clear()
     datasettings.clear()
-    sensorsettings = detectordictionary[emissionline]['sensorsettings']
-    datasettings = detectordictionary[emissionline]['detectorsettings']
+    det = deepcopy(detectordictionary)
+    sensorsettings = det[emissionline]['sensorsettings']
+    datasettings = det[emissionline]['detectorsettings']
+    return {**sensorsettings,**datasettings}
     # if emissionline == 'skalpha':
     #     sensorsettings['threshold'] = 0
     #     sensorsettings['window_min'] = 120
