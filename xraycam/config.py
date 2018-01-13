@@ -74,6 +74,17 @@ detectordictionary = {
             'photon_value':110,
             'avg_energy':2014
         }
+    },
+    'pkbeta':{
+        'sensorsettings':{
+            'threshold':0,
+            'window_min':112,
+            'window_max':126
+        },
+        'detectorsettings':{
+            'photon_value':119,
+            'avg_energy':2136
+        }
     }
 }
 
