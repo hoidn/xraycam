@@ -297,3 +297,74 @@ def process(data, weighted=True, nan_policy=None, getstarttimes=True):
     df =  pd.DataFrame([parse_fit_output(x) for x in fits])
     print(df)
     return fits, df
+
+
+
+### Matplotlib updating plots in Jupyter notebooks
+import threading
+import numpy as np
+import time
+import matplotlib
+# matplotlib.use('nbagg') Import order is important here.
+import matplotlib.pyplot as plt
+
+
+def update_plot(fig, ax, line, get_data_func, stopevent, refreshrate=1):
+    while not stopevent.is_set():
+        x, y = get_data_func()
+        line.set_xdata(x)
+        line.set_ydata(y)
+        ax.relim()
+        ax.autoscale_view()
+        fig.canvas.draw()
+        time.sleep(1/refreshrate)
+
+def make_and_update(get_data_func, stopevent, refreshrate=1):
+    fig,ax = plt.subplots()
+    x, y = get_data_func()
+    lines, = ax.plot(x,y)
+    plt.show()
+    updatethread = threading.Thread(target=update_plot, args=(fig,ax,lines,dummy_get_data,stopupdates))
+    updatethread.start()
+    return updatethread
+
+## Tool to monitor curvature of signal on the sensor
+class CurvatureCheck:
+    
+    def __init__(self,data):
+        try:
+            self.arr = data.get_array()
+        except AttributeError:
+            try:
+                self.arr = data.data
+            except AttributeError:
+                self.arr = data
+        self.threshold = 0.25
+        self.maxdist = 200
+        self.calc_center()
+        
+    def calc_center(self, width=200):
+        self.width = width
+        avg = np.mean(self.arr,axis=0)
+        abovethreshold = avg > self.threshold * np.max(avg)
+        withindist = np.abs(np.arange(len(avg))-np.argmax(avg)) < self.maxdist
+        good = np.where(np.logical_and(abovethreshold, withindist))[0]
+        center = int(np.mean(good))
+        self.center = center
+    
+    def check(self):
+        cmarr = self.arr[:,self.center-self.width:self.center+self.width]
+        cm = camalysis.center_of_masses(cmarr)+self.center-self.width
+        x = np.arange(len(cm))
+        good = np.where(np.isfinite(cm))[0]
+        a,b,c = np.polyfit(x[good],cm[good],2)
+        parabola = self._parabola(x,a,b,c)
+        mplt.plot(gf(cm,5),x)
+        mplt.plot(parabola,x)
+        plotarr = resample_array(self.arr,pxsize=25)
+        mplt.imshow(plotarr,interpolation='none',extent=[0,self.arr.shape[1],self.arr.shape[0],0])
+        mplt.title('B:{:.0f}, T:{:.0f}, Diff:{:.0f}'.format(parabola[-1],parabola[0],parabola[-1]-parabola[0]))
+        mplt.show()
+        
+    def _parabola(self,x,a,b,c):
+        return a*x**2+b*x+c
