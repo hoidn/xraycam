@@ -77,9 +77,9 @@ detectordictionary = {
     },
     'pkbeta':{
         'sensorsettings':{
-            'threshold':0,
-            'window_min':112,
-            'window_max':126
+            'threshold':2,
+            'window_min':114,
+            'window_max':123
         },
         'detectorsettings':{
             'photon_value':119,
