@@ -85,6 +85,17 @@ detectordictionary = {
             'photon_value':119,
             'avg_energy':2136
         }
+    },
+    'umbeta':{
+        'sensorsettings':{
+            'threshold':0,
+            'window_min':0,
+            'window_max':0
+        },
+        'detectorsettings':{
+            'photon_value':181,
+            'avg_energy':3343
+        }
     }
 }
 
