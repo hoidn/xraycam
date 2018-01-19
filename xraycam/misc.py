@@ -297,3 +297,33 @@ def process(data, weighted=True, nan_policy=None, getstarttimes=True):
     df =  pd.DataFrame([parse_fit_output(x) for x in fits])
     print(df)
     return fits, df
+
+
+
+### Matplotlib updating plots in Jupyter notebooks
+import threading
+import numpy as np
+import time
+import matplotlib
+# matplotlib.use('nbagg') Import order is important here.
+import matplotlib.pyplot as plt
+
+
+def update_plot(fig, ax, line, get_data_func, stopevent, refreshrate=1):
+    while not stopevent.is_set():
+        x, y = get_data_func()
+        line.set_xdata(x)
+        line.set_ydata(y)
+        ax.relim()
+        ax.autoscale_view()
+        fig.canvas.draw()
+        time.sleep(1/refreshrate)
+
+def make_and_update(get_data_func, stopevent, refreshrate=1):
+    fig,ax = plt.subplots()
+    x, y = get_data_func()
+    lines, = ax.plot(x,y)
+    plt.show()
+    updatethread = threading.Thread(target=update_plot, args=(fig,ax,lines,dummy_get_data,stopupdates))
+    updatethread.start()
+    return updatethread
