@@ -368,3 +368,135 @@ class CurvatureCheck:
         
     def _parabola(self,x,a,b,c):
         return a*x**2+b*x+c
+
+# Carriage return trick for overwriting previous output for updating print messages (even in Jupyter):
+def check_scan_progress(path='./NiIt551Extended/NiIt551Extended_1/', root='NiIt551Extended_', index=2):
+    numedxs = len(glob.glob(path+root+'{}*'.format(0)))
+    numcurr = len(glob.glob(path+root+'{}*'.format(index)))
+    print( '{} datapoints left to go!\r'.format(numedxs-numcurr), end='')
+#     print( '|'+'-'*int((numcurr/numedxs*100))+'>|\r'.format(numedxs-numcurr), end='')
+
+
+# Interactive widgets and updating plots
+def make_anglescan_widgets():
+    global currentanglescan
+    
+    anglerange = widgets.IntRangeSlider(
+        value=[0, 355],
+        min=0,
+        max=355,
+        step=1,
+        description='Angle Range:',
+        disabled=False,
+        continuous_update=False,
+        orientation='horizontal',
+        readout=True,
+        readout_format='d',
+    )
+
+    prefix = widgets.Text(
+        placeholder='Ex: 3.2.18.anglescan0',
+        description='Scan prefix:',
+        disabled=False
+    )
+
+    rotateimages = widgets.Checkbox(
+        value=False,
+        description='Rotate frames',
+        disabled=False
+    )
+
+    stepsize = widgets.IntText(
+        value=5,
+        step=1,
+        description='Step Size (deg):',
+        disabled=False,
+        style={'description_width': 'initial'},
+        layout={'width':'20%'}
+    )
+
+    startbutton = widgets.Button(
+        description='Start Scan',
+        disabled=False,
+        button_style='success', #'info', 'warning', 'danger' or ''
+    )
+    
+    duration = widgets.IntText(
+        value=10,
+        step=1,
+        description='Duration (sec):',
+        disabled=False,
+        style={'description_width': 'initial'},
+        layout={'width':'20%'}
+    )
+    
+    def start_anglescan(b):
+        if b.description == 'Start Scan':
+            print('starting scan, initializing...')
+            global currentanglescan
+            currentanglescan = scancontrol.AngleScan(
+                                 prefix=prefix.value,
+                                 duration=duration.value,
+                                 anglerange=anglerange.value,
+                                 stepsize=stepsize.value,
+                                 rotate=rotateimages.value
+                               )
+            currentanglescan.run_scan()
+            
+            b.description = 'Stop Scan'
+            b.button_style = 'danger'
+        elif b.description == 'Stop Scan':
+            print('stopping scan:')
+            currentanglescan.stop()
+            
+            b.description = 'Start Scan'
+            b.button_style = 'success'
+  
+    startbutton.on_click(start_anglescan)
+    
+    widgetlist = [prefix, anglerange, stepsize, duration, rotateimages, startbutton]
+    
+    combined = widgets.VBox(widgetlist)
+    
+    return combined
+
+class UpdatingPlot(threading.Thread):
+    
+    def __init__(self, get_data_func, refreshrate=1):
+        import matplotlib.pyplot as plt
+        threading.Thread.__init__(self)
+        
+        self.get_data_func = get_data_func
+        self.refreshrate = refreshrate
+        self.stopevent = threading.Event()
+        
+        self.fig, self.ax = plt.subplots()
+        x, y = self.get_data_func()
+        self.line, = self.ax.plot(x,y)
+        plt.show()
+        
+    def update_plot(self):
+        while not self.stopevent.is_set():
+            x, y = self.get_data_func()
+            self.line.set_xdata(x)
+            self.line.set_ydata(y)
+            self.ax.relim()
+            self.ax.autoscale_view()
+            self.fig.canvas.draw()
+            time.sleep(1/self.refreshrate)
+            
+    def run(self):
+        self.update_plot()
+        
+    def shutdown(self):
+        self.stopevent.set()
+
+def angle_get_data_func(anglescan=None, minbin=0, maxbin=-1):
+    if anglescan is None:
+        anglescan = currentanglescan
+    angles = [x.zrun.angle for x in anglescan.runset.dataruns]
+    counts = [x.counts_per_second(start=minbin,end=maxbin) for x in anglescan.runset.dataruns]
+    sortindices = np.argsort(angles)
+    angles = np.array(angles)[sortindices]
+    counts = np.array(counts)[sortindices]
+    return angles, counts
